@@ -1,0 +1,5 @@
+<Bindings>
+	<Binding name="RUIN_MUSTER_OPEN" header="RUIN_MUSTER" category="ADDONS">
+		RUIN_Muster_Open()
+	</Binding>
+</Bindings>
