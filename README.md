@@ -2,11 +2,13 @@
 
 Events for the whole org: raid nights, PvP pushes and leveling groups, with role sign-ups, role limits, weekly repeats, a raid roster and soft reserves.
 
-Part of the **RUIN Gaming Companion App**. Requires **RUIN Core** (0.3.0 or later). With **RUIN Finder** installed, events that still need players appear on the Finder board; **RUIN Codex** can plan raids into Muster.
+Part of the **RUIN Gaming Companion App**. Requires **RUIN Core** (0.3.0 or later). With **RUIN Finder** installed, events that still need players appear on the Finder board, and a sighting's *Find group* button lists you there; **RUIN Codex** can plan raids into Muster.
 
 ## The experience
-- **Where it lives:** the Muster tab in the RUIN window (Events, Roster, Reserves, Bounties), `/muster`, and key bindings to open Muster and to claim a bounty kill.
-- **Rally points:** tick *Rally here* when posting an event, or type `/muster rally <name>` to call a rally where you stand right now. Everyone sees the meeting place pinned on the world map and minimap from 3 hours before the start to 2 hours after, with its distance in the event list. RUIN Intel enemy reports within about 300 yards mark it CONTESTED for 10 minutes. `/muster pins` hides the pins.
+- **Where it lives:** the Muster tab in the RUIN window (Events, Roster, Reserves, Bounties, Sightings, Timers), `/muster`, and key bindings to open Muster, claim a bounty kill, report an enemy group and call for help.
+- **Rally points:** tick *Rally here* when posting an event, or type `/muster rally <name>` to call a rally where you stand right now. Everyone sees the meeting place pinned on the world map and minimap from 3 hours before the start to 2 hours after, with its distance in the event list. An enemy sighting within about 300 yards mark it CONTESTED for 10 minutes. `/muster pins` hides the pins.
+- **Sightings (formerly RUIN Intel):** one button reports an enemy group, an under-attack call, a world boss, a rare, a buff drop or anything else, with your location. Every RUIN member gets an alert and a pin on the world map and minimap that fades over 30 minutes. `/muster spot <kind> [detail]` (or `/intel ...`) does the same from chat. Boss, rare and enemy rows have a *Find group* button that lists you in RUIN Finder.
+- **Timers:** world boss kills and world buff drops (`/muster timer songflower`, `/muster timer dragonslayer 5`), shared with the org. Respawn windows are Classic's, as a guide.
 - **Bounties:** officers put a price on a rival guild or player (Bounties page, or `/muster bounty guild|player <name> (reward)`). Kill one, target the body and press *Claim kill on target* (`/muster claim` or the key binding); another RUIN member nearby confirms (`/muster confirm`). You can't confirm your own kill.
 - **World PvP:** the faction-wide campaign, keeps, captures and Most Wanted belong to **Overlord Forever**, which RUIN uses instead of its old Warfront addon. The Bounties page opens Overlord when it's installed.
 - **Posting (officers):** title, start time, type, size and how many tanks, healers and DPS are needed (filled in from the size), an optional description, and *Weekly* to repeat it.

@@ -13,14 +13,14 @@
 -- campaign, keeps, captures and Most Wanted are left to Overlord.
 local ADDON, ns = ...
 local R = RUIN_API
-if not R or (R.apiLevel or 1) < 4 then
-    print("|cff54b7d9[RUIN]|r Muster needs a newer RUIN Core (0.3.7 or later).")
+if not R or (R.apiLevel or 1) < 5 then
+    print("|cff54b7d9[RUIN]|r Muster needs a newer RUIN Core (0.3.9 or later).")
     return
 end
 local W = R.Widgets
 local C = W.COLORS
 
-local M = R:RegisterModule("Muster", { version = "0.3.3" })
+local M = R:RegisterModule("Muster", { version = "0.3.4" })
 
 local KINDS = { "Raid", "Dungeon", "PvP", "Leveling", "Social" }
 local SIZES = { "Open", "5", "10", "20", "40" }
@@ -31,12 +31,14 @@ local KEEP_AFTER = 6 * 3600
 local WEEK = 7 * 86400
 local SLOTS_AHEAD = 48 * 3600          -- events this close offer open slots to Finder
 local RALLY_BEFORE, RALLY_AFTER = 3 * 3600, 2 * 3600   -- rally pins show this long around the start
-local CONTEST_YARDS, CONTEST_SECONDS = 300, 10 * 60     -- an Intel enemy sighting this close contests a rally
+local CONTEST_YARDS, CONTEST_SECONDS = 300, 10 * 60     -- an enemy sighting this close contests a rally
 local BOUNTY_DAYS = 7
 local CLAIM_SECONDS = 5 * 60                            -- witnesses have this long to confirm a kill
 local WITNESS_YARDS = 200
 local RALLY_ICON = "Interface\\Icons\\Ability_Warrior_BattleShout"
 local DEFAULTS = { events = {}, reminded = {}, practice = false, bounties = {}, claims = {}, pins = true }
+
+ns.Muster = M
 
 local db
 local ui = { kind = "Raid", size = "Open", need = { 0, 0, 0 }, weekly = false, rally = false, bKind = "Guild" }
@@ -257,6 +259,7 @@ function M:OnAsk()
         for _, ev in pairs(db.events) do
             if ev.at + KEEP_AFTER > now and not ev.practice then self:Send("EVENT", ev, "ORG", nil, R.PRIORITY.BULK) end
         end
+        if ns.World then ns.World.Ask() end
         if R:IsOfficer() then
             for _, b in ipairs(M.ActiveBounties()) do
                 if not b.practice then self:Send("BOUNTY", b, "ORG", nil, R.PRIORITY.BULK) end
@@ -606,7 +609,7 @@ local function yardsBetween(map, x1, y1, x2, y2)
     return math.sqrt(dx * dx + dy * dy)
 end
 
-local function onIntelSpot(sp)
+local function onSighting(sp)
     if type(sp) ~= "table" or sp.kind ~= "enemy" or type(sp.map) ~= "number" or not db then return end
     local now = GetServerTime()
     for _, ev in pairs(db.events) do
@@ -626,6 +629,8 @@ local function onIntelSpot(sp)
     updatePins()
     refreshPage()
 end
+
+M.OnSighting = onSighting
 
 changed = function()
     refreshPage()
@@ -1088,12 +1093,14 @@ local function buildPage(panel)
     ui.practiceCheck = W.Check(panel, "Practice mode", function() return db.practice end,
         function(v) M:SetPractice(v) end)
     ui.practiceCheck:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -110, 2)
-    ui.tabs = W.SubTabs(panel, { "Events", "Roster", "Reserves", "Bounties" }, function() refreshPage() end)
+    ui.tabs = W.SubTabs(panel, { "Events", "Roster", "Reserves", "Bounties", "Sightings", "Timers" }, function() refreshPage() end)
     ui.eventsPage = ui.tabs.pages[1]
     buildEvents(ui.tabs.pages[1])
     buildRoster(ui.tabs.pages[2])
     buildReserves(ui.tabs.pages[3])
     buildBounties(ui.tabs.pages[4])
+    ns.World.BuildSightings(ui.tabs.pages[5])
+    ns.World.BuildTimers(ui.tabs.pages[6])
 
     refreshPage = function()
         if not ui.panel:IsVisible() then return end
@@ -1111,7 +1118,13 @@ local function buildPage(panel)
             layoutBounties()
             ui.bountyList:SetItems(activeBounties())
             ui.claimList:SetItems(openClaims())
+        elseif tab == 5 then
+            ns.World.Refresh("sightings")
+        elseif tab == 6 then
+            ns.World.Refresh("timers")
         end
+        local nSight = #ns.World.Active()
+        ui.tabs:SetLabel(5, nSight > 0 and ("Sightings (" .. nSight .. ")") or "Sightings")
         local nb = #activeBounties()
         ui.tabs:SetLabel(4, nb > 0 and ("Bounties (" .. nb .. ")") or "Bounties")
     end
@@ -1137,7 +1150,7 @@ function M:OnEnable()
     self:Listen("CLAIM", "OnClaim")
     self:Listen("CONFIRM", "OnConfirm")
     self:AddTab("Muster", buildPage)
-    R:Subscribe("Intel:SPOT", onIntelSpot)
+    ns.World.Init(self, db, function() refreshPage() end)
 
     R:Subscribe("CHANNELS_CHANGED", function()
         C_Timer.After(6, function() if R:IsConnected() then self:Send("ASK", {}, "ORG") end end)
@@ -1151,7 +1164,7 @@ BINDING_HEADER_RUIN_MUSTER = "RUIN Muster"
 BINDING_NAME_RUIN_MUSTER_OPEN = "Open Muster"
 BINDING_NAME_RUIN_MUSTER_CLAIM = "Muster: claim bounty kill on target"
 
--- /muster [practice | rally <name> | bounty guild|player <name> (reward) | claim | confirm | pins]
+-- /muster [spot <kind> [detail] | timer <name> [min] | practice | rally <name> | bounty guild|player <name> (reward) | claim | confirm | pins]
 SLASH_RUINMUSTER1 = "/muster"
 SlashCmdList.RUINMUSTER = function(input)
     input = input or ""
@@ -1171,6 +1184,8 @@ SlashCmdList.RUINMUSTER = function(input)
         M:ClaimKill()
     elseif cmd == "confirm" then
         M:Confirm()
+    elseif cmd == "spot" or cmd == "timer" then
+        ns.World.Slash(cmd == "timer" and ("timer " .. rest) or rest)
     elseif cmd == "pins" then
         db.pins = not db.pins
         updatePins()

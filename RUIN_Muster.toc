@@ -1,8 +1,8 @@
 ## Interface: 16001, 120105
 ## Title: |cffe6b862RUIN|r Muster
-## Notes: Org-wide events with role sign-ups and reminders, rally points and bounties, across every RUIN guild.
+## Notes: Org-wide events with role sign-ups and reminders, rally points, bounties, and world sightings and boss timers, across every RUIN guild.
 ## Author: RUIN
-## Version: 0.3.3
+## Version: 0.3.4
 ## Dependencies: RUIN_Core
 ## SavedVariables: RUIN_MusterDB
 ## IconTexture: Interface\Icons\INV_Misc_Note_02
@@ -10,3 +10,4 @@
 ## Category: RUIN Gaming Companion App
 
 Muster.lua
+World.lua

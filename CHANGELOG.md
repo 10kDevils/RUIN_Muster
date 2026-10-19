@@ -6,6 +6,15 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
+## 0.3.4 — 2026-10-19
+
+RUIN Intel is retired and folded into Muster (needs RUIN Core 0.3.9). Muster already reacts to something happening in the world or plans a raid, which is what Intel was for.
+
+1. **Sightings page (from Intel):** one button reports an enemy group, an under-attack call, a world boss, a rare, a buff drop or anything else, with your location. Every RUIN member gets an alert, an entry in the 30-minute feed and a pin on the world map and minimap that fades as it ages. Also `/muster spot <kind> [detail]` (and `/intel ...` still works) and two new key bindings (report enemy group, I'm under attack).
+2. **Timers page (from Intel):** world boss kills and world buff drops, with "Now" and "drops in N minutes", shared with the org and re-sent to anyone who logs in.
+3. **Find group:** boss, rare, enemy and under-attack sightings have a *Find group* button that lists you in RUIN Finder for that activity (needs Finder 0.3.2).
+4. Rally points react to sightings directly, no separate addon needed. Your RUIN Intel reports and timers are copied across once. Old Intel versions still in the org are still understood.
+
 ## 0.3.3 — 2026-10-18
 
 3 changes since 0.3.0 (needs RUIN Core 0.3.7). RUIN Warfront is retired: RUIN's world PvP runs on Overlord Forever, and the Warfront features Overlord has no match for move here.

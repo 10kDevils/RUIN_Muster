@@ -5,4 +5,10 @@
 	<Binding name="RUIN_MUSTER_CLAIM" category="ADDONS">
 		RUIN_Muster_Claim()
 	</Binding>
+	<Binding name="RUIN_MUSTER_ENEMY" category="ADDONS">
+		RUIN_Muster_ReportEnemy()
+	</Binding>
+	<Binding name="RUIN_MUSTER_ATTACK" category="ADDONS">
+		RUIN_Muster_UnderAttack()
+	</Binding>
 </Bindings>
