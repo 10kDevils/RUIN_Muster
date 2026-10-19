@@ -2,4 +2,7 @@
 	<Binding name="RUIN_MUSTER_OPEN" header="RUIN_MUSTER" category="ADDONS">
 		RUIN_Muster_Open()
 	</Binding>
+	<Binding name="RUIN_MUSTER_CLAIM" category="ADDONS">
+		RUIN_Muster_Claim()
+	</Binding>
 </Bindings>

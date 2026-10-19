@@ -2,10 +2,13 @@
 
 Events for the whole org: raid nights, PvP pushes and leveling groups, with role sign-ups, role limits, weekly repeats, a raid roster and soft reserves.
 
-Part of the RUIN addon suite. Requires **RUIN Core** (0.3.0 or later). With **RUIN Finder** installed, events that still need players appear on the Finder board; **RUIN Codex** can plan raids into Muster.
+Part of the **RUIN Gaming Companion App**. Requires **RUIN Core** (0.3.0 or later). With **RUIN Finder** installed, events that still need players appear on the Finder board; **RUIN Codex** can plan raids into Muster.
 
 ## The experience
-- **Where it lives:** the Muster page in the RUIN window (Events, Roster, Reserves), `/muster`, and an Open Muster key binding.
+- **Where it lives:** the Muster tab in the RUIN window (Events, Roster, Reserves, Bounties), `/muster`, and key bindings to open Muster and to claim a bounty kill.
+- **Rally points:** tick *Rally here* when posting an event, or type `/muster rally <name>` to call a rally where you stand right now. Everyone sees the meeting place pinned on the world map and minimap from 3 hours before the start to 2 hours after, with its distance in the event list. RUIN Intel enemy reports within about 300 yards mark it CONTESTED for 10 minutes. `/muster pins` hides the pins.
+- **Bounties:** officers put a price on a rival guild or player (Bounties page, or `/muster bounty guild|player <name> (reward)`). Kill one, target the body and press *Claim kill on target* (`/muster claim` or the key binding); another RUIN member nearby confirms (`/muster confirm`). You can't confirm your own kill.
+- **World PvP:** the faction-wide campaign, keeps, captures and Most Wanted belong to **Overlord Forever**, which RUIN uses instead of its old Warfront addon. The Bounties page opens Overlord when it's installed.
 - **Posting (officers):** title, start time, type, size and how many tanks, healers and DPS are needed (filled in from the size), an optional description, and *Weekly* to repeat it.
 - **Signing up:** the role buttons sign you up, X withdraws. Each event shows have/need per role; hover it for the description and who's coming.
 - **Weekly events:** once a weekly event starts, next week's is posted by itself.
@@ -15,7 +18,7 @@ Part of the RUIN addon suite. Requires **RUIN Core** (0.3.0 or later). With **RU
 - **Practice mode:** tick *Practice mode* or `/muster practice` to post and sign up alone; practice events stay on your screen.
 
 ## What it shares with RUIN
-Events officers post (with descriptions, sizes and needs), sign-ups with role and soft reserve, and rosters.
+Events officers post (with descriptions, sizes, needs and rally points), sign-ups with role and soft reserve, rosters, bounties, kill claims with where they happened, and confirmations.
 
 ## Notes
 Times are stored as one moment and shown in each player's local time.

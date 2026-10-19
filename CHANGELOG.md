@@ -6,6 +6,14 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
+## 0.3.3 — 2026-10-18
+
+3 changes since 0.3.0 (needs RUIN Core 0.3.7). RUIN Warfront is retired: RUIN's world PvP runs on Overlord Forever, and the Warfront features Overlord has no match for move here.
+
+1. Rally points: tick *Rally here* when posting an event, or type `/muster rally <name>` to call a rally right where you stand. The meeting place is pinned on everyone's world map and minimap from 3 hours before the start to 2 hours after, with its distance in the event list. When RUIN Intel reports enemies within about 300 yards, the rally is marked CONTESTED for 10 minutes and everyone is alerted.
+2. Bounties (from Warfront): officers post a bounty on a rival guild or player with an optional reward (Bounties page, or `/muster bounty guild|player <name> (reward)`). Kill one, target the body and claim (`/muster claim`, or the new key binding); another RUIN member nearby confirms (`/muster confirm`). Practice mode covers bounties too.
+3. New RUIN look (the Muster tab, part of the RUIN Gaming Companion App), Retail's interface number in the TOC, and a pointer to Overlord Forever for the faction-wide campaign, keeps, captures and Most Wanted.
+
 ## 0.3.0 — 2026-10-18
 
 - Suite release: every RUIN addon moves to 0.3.0 together, bringing everything from the 0.2.x entries below. No further code changes.

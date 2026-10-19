@@ -5,16 +5,22 @@
 -- Weekly events post their next week by themselves. Officers arrange the
 -- raid into groups and a bench, and raids take one soft reserve per player.
 -- Open slots are offered to RUIN Finder when it is installed.
+--
+-- Since 0.3.3 Muster also carries what RUIN Warfront did that Overlord
+-- Forever doesn't: rally points (an event's meeting place, pinned on the map
+-- and marked contested when RUIN Intel sees enemies nearby) and bounties on
+-- rival guilds or players, confirmed by a RUIN witness. The faction-wide
+-- campaign, keeps, captures and Most Wanted are left to Overlord.
 local ADDON, ns = ...
 local R = RUIN_API
-if not R or (R.apiLevel or 1) < 3 then
-    print("|cffc41e3aRUIN|r Muster needs a newer RUIN Core (0.3.0 or later).")
+if not R or (R.apiLevel or 1) < 4 then
+    print("|cff54b7d9[RUIN]|r Muster needs a newer RUIN Core (0.3.7 or later).")
     return
 end
 local W = R.Widgets
 local C = W.COLORS
 
-local M = R:RegisterModule("Muster", { version = "0.3.0" })
+local M = R:RegisterModule("Muster", { version = "0.3.3" })
 
 local KINDS = { "Raid", "Dungeon", "PvP", "Leveling", "Social" }
 local SIZES = { "Open", "5", "10", "20", "40" }
@@ -24,10 +30,16 @@ local REMIND_BEFORE = 15 * 60
 local KEEP_AFTER = 6 * 3600
 local WEEK = 7 * 86400
 local SLOTS_AHEAD = 48 * 3600          -- events this close offer open slots to Finder
-local DEFAULTS = { events = {}, reminded = {}, practice = false }
+local RALLY_BEFORE, RALLY_AFTER = 3 * 3600, 2 * 3600   -- rally pins show this long around the start
+local CONTEST_YARDS, CONTEST_SECONDS = 300, 10 * 60     -- an Intel enemy sighting this close contests a rally
+local BOUNTY_DAYS = 7
+local CLAIM_SECONDS = 5 * 60                            -- witnesses have this long to confirm a kill
+local WITNESS_YARDS = 200
+local RALLY_ICON = "Interface\\Icons\\Ability_Warrior_BattleShout"
+local DEFAULTS = { events = {}, reminded = {}, practice = false, bounties = {}, claims = {}, pins = true }
 
 local db
-local ui = { kind = "Raid", size = "Open", need = { 0, 0, 0 }, weekly = false }
+local ui = { kind = "Raid", size = "Open", need = { 0, 0, 0 }, weekly = false, rally = false, bKind = "Guild" }
 
 local ROLE_NAMES = { T = "Tank", H = "Healer", D = "DPS" }
 local ROLE_ORDER = { "T", "H", "D" }
@@ -75,6 +87,36 @@ local function whenText(at) return date("%a %d %b %H:%M", at) end
 
 local refreshPage = function() end
 local changed
+local updatePins = function() end
+
+---------------------------------------------------------------------------
+-- Rally points: where an event meets, from the officer's position
+---------------------------------------------------------------------------
+local function here()
+    local map, x, y = R.Map:PlayerPos()
+    if not map then return nil end
+    local zone = (GetZoneText and GetZoneText()) or ""
+    local info = C_Map and C_Map.GetMapInfo and C_Map.GetMapInfo(map)
+    return { map = map, x = x, y = y, zone = (info and info.name) or zone }
+end
+
+local function cleanRally(r)
+    if type(r) ~= "table" or type(r.map) ~= "number" or type(r.x) ~= "number" or type(r.y) ~= "number" then return nil end
+    return { map = r.map, x = r.x, y = r.y, zone = type(r.zone) == "string" and r.zone:sub(1, 40) or "" }
+end
+
+local function rallyActive(ev, now)
+    now = now or GetServerTime()
+    return ev.rally and ev.at - RALLY_BEFORE <= now and now <= ev.at + RALLY_AFTER
+end
+
+local function rallyText(ev)
+    if not ev.rally then return "" end
+    local dist = R.Map.DistanceText and R.Map:DistanceText(ev.rally.map, ev.rally.x, ev.rally.y)
+    local contested = ev.contested and (GetServerTime() - (ev.contested.t or 0) <= CONTEST_SECONDS)
+    return (contested and (C.bad .. "  CONTESTED|r") or "") .. C.dim .. "  @ " .. (ev.rally.zone ~= "" and ev.rally.zone or "rally point")
+        .. (dist and (" " .. dist) or "") .. "|r"
+end
 
 ---------------------------------------------------------------------------
 -- Events and sign-ups
@@ -101,6 +143,10 @@ function M:Create(title, whenText_, opts)
         ev.need = { tonumber(opts.need[1]) or 0, tonumber(opts.need[2]) or 0, tonumber(opts.need[3]) or 0 }
     end
     if opts.weekly then ev.weekly, ev.series, ev.week = true, ev.id, 0 end
+    if opts.rally then
+        ev.rally = cleanRally(type(opts.rally) == "table" and opts.rally or here())
+        if not ev.rally then self:Print("Couldn't read your position for the rally point; posted without one.") end
+    end
     if practicing() then ev.practice = true end
     db.events[ev.id] = ev
     if ev.practice then
@@ -160,6 +206,7 @@ end
 
 function M:OnEvent(ev, sender)
     if not validEvent(ev) then return end
+    ev.rally = cleanRally(ev.rally)
     local cur = db.events[ev.id]
     if cur and (cur.t or 0) >= (ev.t or 0) then
         -- keep our version, but merge any sign-ups we have not seen
@@ -177,7 +224,10 @@ function M:OnEvent(ev, sender)
         end
         ev.signups = ev.signups or {}
         db.events[ev.id] = ev
-        if not cur and ev.at > GetServerTime() then
+        if not cur and ev.rally and ev.at <= GetServerTime() and rallyActive(ev) then
+            self:Toast(("Rally now: %s%s, pinned on your map (%s)"):format(ev.title,
+                ev.rally.zone ~= "" and (" in " .. ev.rally.zone) or "", W.ClassName(sender)), { sound = true })
+        elseif not cur and ev.at > GetServerTime() then
             self:Toast(("New %s: %s, %s"):format(ev.kind or "event", ev.title, whenText(ev.at)))
         end
     end
@@ -206,6 +256,11 @@ function M:OnAsk()
         local now = GetServerTime()
         for _, ev in pairs(db.events) do
             if ev.at + KEEP_AFTER > now and not ev.practice then self:Send("EVENT", ev, "ORG", nil, R.PRIORITY.BULK) end
+        end
+        if R:IsOfficer() then
+            for _, b in ipairs(M.ActiveBounties()) do
+                if not b.practice then self:Send("BOUNTY", b, "ORG", nil, R.PRIORITY.BULK) end
+            end
         end
     end)
 end
@@ -317,7 +372,8 @@ local function rollWeekly(now)
             if not db.events[nid] then
                 local nxt = { id = nid, title = ev.title, kind = ev.kind, at = ev.at + WEEK, by = ev.by, gu = ev.gu,
                               signups = {}, t = GetServerTime(), desc = ev.desc, size = ev.size, need = ev.need,
-                              weekly = true, series = ev.series or ev.id, week = week, practice = ev.practice }
+                              weekly = true, series = ev.series or ev.id, week = week, practice = ev.practice,
+                              rally = ev.rally }
                 db.events[nid] = nxt
                 if not nxt.practice then M:Send("EVENT", nxt, "ORG", nil, R.PRIORITY.BULK) end
             end
@@ -362,8 +418,218 @@ end
 -- Officers can post from other modules (Codex's raid planner) through this.
 function M:CanPost() return canPost() end
 
+-- A rally right now, where you stand (what Warfront's "Mark objective here"
+-- became): a PvP event starting this minute with a map pin for the org.
+function M:Rally(title)
+    if not canPost() then return self:Print("Only officers call rallies (or switch on practice mode).") end
+    local pos = here()
+    if not pos then return self:Print("Couldn't read your position here.") end
+    title = R.Util.Trim(title or "")
+    if title == "" then title = "Rally: " .. (pos.zone ~= "" and pos.zone or "here") end
+    return self:Create(title, date("%Y-%m-%d %H:%M", time()), { kind = "PvP", rally = pos,
+        desc = "Rally point set by " .. tostring(UnitName("player")) .. "." })
+end
+
+---------------------------------------------------------------------------
+-- Bounties: officers name a rival guild or player; a claimed kill counts
+-- once another RUIN member confirms it (moved here from RUIN Warfront).
+---------------------------------------------------------------------------
+local function activeBounties()
+    local list, now = {}, GetServerTime()
+    for id, b in pairs(db.bounties) do
+        if (b.exp or 0) < now then db.bounties[id] = nil else list[#list + 1] = b end
+    end
+    table.sort(list, function(a, b) return (a.t or 0) > (b.t or 0) end)
+    return list
+end
+M.ActiveBounties = function() return activeBounties() end
+
+function M:PostBounty(target, kind, reward)
+    if not canPost() then return self:Print("Only officers can post bounties.") end
+    target = R.Util.Trim(target or ""):sub(1, 40)
+    if target == "" then return self:Print("Name the guild or player for the bounty.") end
+    local now = GetServerTime()
+    local b = { id = newId(), target = target, kind = kind == "Player" and "Player" or "Guild",
+                reward = R.Util.Trim(reward or ""):sub(1, 40), by = UnitName("player"), t = now,
+                exp = now + BOUNTY_DAYS * 86400 }
+    if practicing() then b.practice = true end
+    db.bounties[b.id] = b
+    if not b.practice then self:Send("BOUNTY", b, "ORG") end
+    self:Toast(("Bounty posted on %s %s%s"):format(b.kind == "Guild" and "guild" or "player", b.target,
+        b.reward ~= "" and (" (" .. b.reward .. ")") or ""))
+    refreshPage()
+    return b
+end
+
+function M:RemoveBounty(id)
+    local b = db.bounties[id]
+    if not b or not canPost() then return end
+    db.bounties[id] = nil
+    if not b.practice then self:Send("BDEL", { id = id }, "ORG") end
+    refreshPage()
+end
+
+function M:OnBounty(b, sender)
+    if type(b) ~= "table" or type(b.id) ~= "string" or type(b.target) ~= "string" or type(b.exp) ~= "number" then return end
+    b.target = b.target:sub(1, 40)
+    b.reward = type(b.reward) == "string" and b.reward:sub(1, 40) or ""
+    b.kind = b.kind == "Player" and "Player" or "Guild"
+    local known = db.bounties[b.id]
+    db.bounties[b.id] = b
+    if not known and b.exp > GetServerTime() then
+        self:Toast(("Bounty on %s %s%s, posted by %s"):format(b.kind == "Player" and "player" or "guild", b.target,
+            b.reward ~= "" and (" (" .. b.reward .. ")") or "", W.ClassName(sender)))
+    end
+    refreshPage()
+end
+
+function M:OnBountyDelete(d)
+    if type(d.id) == "string" and db.bounties[d.id] then db.bounties[d.id] = nil; refreshPage() end
+end
+
+local function secret(v) return issecretvalue and issecretvalue(v) end
+
+local function matchBounty(name, guild)
+    for _, b in ipairs(activeBounties()) do
+        if b.kind == "Player" and name and b.target:lower() == R.Util.ShortName(name):lower() then return b end
+        if b.kind == "Guild" and guild and b.target:lower() == guild:lower() then return b end
+    end
+end
+
+-- Target the body of an enemy player you killed, then claim.
+function M:ClaimKill()
+    if not (UnitExists and UnitExists("target") and UnitIsPlayer and UnitIsPlayer("target")) then
+        return self:Print("Target the enemy player you killed (their body), then claim the bounty.")
+    end
+    if UnitIsFriend and UnitIsFriend("player", "target") then return self:Print("That's not an enemy player.") end
+    if UnitIsDeadOrGhost and not UnitIsDeadOrGhost("target") then return self:Print("They're still alive!") end
+    local name = UnitName("target")
+    local guild = GetGuildInfo and GetGuildInfo("target")
+    if secret(name) or secret(guild) then return self:Print("The game is hiding that player's details right now; try again out of combat.") end
+    local b = matchBounty(name, guild)
+    if not b then
+        return self:Print(("No bounty on %s%s."):format(tostring(name), guild and (" <" .. guild .. ">") or ""))
+    end
+    local map, x, y = R.Map:PlayerPos()
+    local p = R:GetPlayer()
+    local c = { id = newId(), b = b.id, v = R.Util.ShortName(name), vg = guild, by = p.name, gu = p.guild,
+                t = GetServerTime(), map = map, x = x, y = y }
+    if b.practice then
+        c.practice, c.confirmed = true, "practice"
+        db.claims[c.id] = c
+        self:Toast(("Practice bounty: you killed %s. Confirmed (practice needs no witness)."):format(c.v))
+        refreshPage()
+        return c
+    end
+    db.claims[c.id] = c
+    self:Send("CLAIM", c, "ORG", nil, R.PRIORITY.ALERT)
+    self:Toast(("Bounty claim sent: %s%s. A RUIN member who saw it must confirm."):format(c.v, guild and (" <" .. guild .. ">") or ""))
+    refreshPage()
+    return c
+end
+
+function M:OnClaim(c, sender)
+    if type(c) ~= "table" or type(c.id) ~= "string" or type(c.b) ~= "string" or type(c.v) ~= "string" then return end
+    if db.claims[c.id] then return end
+    c.by, c.confirmed = sender, nil
+    db.claims[c.id] = c
+    local near = type(c.map) == "number" and select(3, R.Map:Offset(c.map, c.x, c.y))
+    if near and near <= WITNESS_YARDS then
+        self:Toast(("Did you see %s kill %s? Confirm on the Muster Bounties page or /muster confirm."):format(
+            W.ClassName(sender), c.v), { sound = true })
+    end
+    refreshPage()
+end
+
+-- Confirm the newest open claim (or a given one) as a witness.
+function M:Confirm(id)
+    local now, best = GetServerTime(), nil
+    for cid, c in pairs(db.claims) do
+        local open = not c.confirmed and now - (c.t or 0) <= CLAIM_SECONDS and c.by ~= UnitName("player")
+        if open and (cid == id or (not id and (not best or c.t > best.t))) then best = c end
+    end
+    if not best then return self:Print("No bounty claim waiting for a witness.") end
+    self:Send("CONFIRM", { c = best.id }, "ORG", nil, R.PRIORITY.ALERT)
+    self:OnConfirm({ c = best.id }, UnitName("player"))
+end
+
+function M:OnConfirm(d, sender)
+    local c = type(d.c) == "string" and db.claims[d.c]
+    if not c or c.confirmed or R.Util.ShortName(sender) == R.Util.ShortName(c.by or "") then return end
+    c.confirmed = sender
+    self:Toast(("Bounty confirmed: %s killed %s%s, witnessed by %s."):format(W.ClassName(c.by), c.v,
+        c.vg and (" <" .. c.vg .. ">") or "", W.ClassName(sender)), { sound = true })
+    refreshPage()
+end
+
+local function openClaims()
+    local list, now = {}, GetServerTime()
+    for id, c in pairs(db.claims) do
+        if now - (c.t or 0) > 86400 then
+            db.claims[id] = nil
+        elseif now - (c.t or 0) <= CLAIM_SECONDS or c.confirmed then
+            list[#list + 1] = c
+        end
+    end
+    table.sort(list, function(a, b) return (a.t or 0) > (b.t or 0) end)
+    return list
+end
+
+---------------------------------------------------------------------------
+-- Rally pins on the map, and RUIN Intel sightings that contest them
+---------------------------------------------------------------------------
+updatePins = function()
+    if not db then return end
+    local keep, now = {}, GetServerTime()
+    if db.pins then
+        for id, ev in pairs(db.events) do
+            if rallyActive(ev, now) then
+                local contested = ev.contested and now - (ev.contested.t or 0) <= CONTEST_SECONDS
+                R.Map:SetPin("Muster", id, { map = ev.rally.map, x = ev.rally.x, y = ev.rally.y, icon = RALLY_ICON,
+                    color = contested and W.MARKERS.enemy or W.MARKERS.event,
+                    title = ev.title .. (contested and "  (contested)" or ""),
+                    text = whenText(ev.at) .. "  ·  " .. (ev.kind or "Event") })
+                keep[id] = true
+            end
+        end
+    end
+    for id in pairs(R.Map:GetPins("Muster")) do
+        if not keep[id] then R.Map:RemovePin("Muster", id) end
+    end
+end
+
+local function yardsBetween(map, x1, y1, x2, y2)
+    if not (C_Map and C_Map.GetMapWorldSize) then return nil end
+    local w, h = C_Map.GetMapWorldSize(map)
+    if not w or w <= 0 then return nil end
+    local dx, dy = (x2 - x1) * w, (y2 - y1) * h
+    return math.sqrt(dx * dx + dy * dy)
+end
+
+local function onIntelSpot(sp)
+    if type(sp) ~= "table" or sp.kind ~= "enemy" or type(sp.map) ~= "number" or not db then return end
+    local now = GetServerTime()
+    for _, ev in pairs(db.events) do
+        if rallyActive(ev, now) then
+            local tx, ty = R.Map:Translate(sp.map, sp.x, sp.y, ev.rally.map)
+            local yards = tx and yardsBetween(ev.rally.map, ev.rally.x, ev.rally.y, tx, ty)
+            if yards and yards <= CONTEST_YARDS then
+                local fresh = not (ev.contested and now - (ev.contested.t or 0) <= CONTEST_SECONDS)
+                ev.contested = { t = now, text = sp.text or "", by = sp.by }
+                if fresh then
+                    M:Toast(("%s rally point is contested%s (%s)"):format(ev.title,
+                        (sp.text or "") ~= "" and (": " .. sp.text) or "", W.ClassName(sp.by)), { sound = true })
+                end
+            end
+        end
+    end
+    updatePins()
+    refreshPage()
+end
+
 changed = function()
     refreshPage()
+    updatePins()
     M:Publish("EVENTS")
 end
 
@@ -373,6 +639,7 @@ end
 local function tick()
     local now, me = GetServerTime(), R:GetPlayerGUID()
     rollWeekly(now)
+    updatePins()
     for id, ev in pairs(db.events) do
         if ev.at + KEEP_AFTER < now and not ev.weekly then
             db.events[id] = nil
@@ -388,9 +655,11 @@ function M:SetPractice(on)
     db.practice = on and true or false
     if not db.practice then
         for id, ev in pairs(db.events) do if ev.practice then db.events[id] = nil end end
+        for id, b in pairs(db.bounties) do if b.practice then db.bounties[id] = nil end end
+        for id, c in pairs(db.claims) do if c.practice then db.claims[id] = nil end end
     end
     if ui.practiceCheck then ui.practiceCheck:Refresh() end
-    self:Print(db.practice and "Practice mode on: post events and sign up to try Muster. Only you see practice events."
+    self:Print(db.practice and "Practice mode on: post events, rallies and bounties to try Muster. Only you see practice items."
         or "Practice mode off. Practice events cleared.")
     changed()
 end
@@ -425,6 +694,12 @@ local function eventTooltip(ev)
         tip:AddLine(("%s  ·  %s%s"):format(whenText(ev.at), ev.kind or "?", ev.size and ("  ·  " .. ev.size .. " players") or ""), 1, 1, 1)
         if ev.desc and ev.desc ~= "" then tip:AddLine(ev.desc, 0.9, 0.9, 0.9, true) end
         if ev.weekly or ev.series then tip:AddLine(ev.weekly and "Repeats weekly" or "Part of a weekly series", 0.6, 0.8, 1) end
+        if ev.rally then
+            tip:AddLine(("Rally point: %s %.1f, %.1f (pinned on your map near the start)"):format(ev.rally.zone, ev.rally.x * 100, ev.rally.y * 100), 1, 0.6, 0.2)
+            if ev.contested and GetServerTime() - (ev.contested.t or 0) <= CONTEST_SECONDS then
+                tip:AddLine("Contested: " .. (ev.contested.text ~= "" and ev.contested.text or "enemies reported nearby") .. " (" .. tostring(ev.contested.by) .. ")", 1, 0.3, 0.3)
+            end
+        end
         tip:AddLine("Posted by " .. tostring(ev.by) .. (ev.gu and (", " .. ev.gu) or ""), 0.6, 0.6, 0.6)
         local list = sortedSignups(ev)
         if #list > 0 then tip:AddLine(" ") end
@@ -477,11 +752,13 @@ local function buildEvents(page)
     local descHint = W.Label(f, C.dim .. "description (optional)|r", "GameFontHighlightSmall")
     descHint:SetPoint("LEFT", desc, "RIGHT", 6, 0)
     local weekly = W.Check(f, "Weekly", function() return ui.weekly end, function(v) ui.weekly = v end)
-    weekly:SetPoint("TOPLEFT", 480, -58)
+    weekly:SetPoint("TOPLEFT", 456, -58)
+    local rally = W.Check(f, "Rally here", function() return ui.rally end, function(v) ui.rally = v end)
+    rally:SetPoint("TOPLEFT", 540, -58)
     local post = W.Button(f, "Post", 70, function()
         for i = 1, 3 do ui.need[i] = tonumber(needBoxes[i]:GetText()) or 0 end
         local ev = M:Create(title:GetText(), when:GetText(), { kind = ui.kind, desc = desc:GetText(), size = ui.size,
-                                                             need = ui.need, weekly = ui.weekly })
+                                                             need = ui.need, weekly = ui.weekly, rally = ui.rally })
         if ev then title:SetText(""); desc:SetText("") end
     end)
     post:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -60)
@@ -507,7 +784,7 @@ local function buildEvents(page)
         local status = mine and (C.good .. "  you: " .. ROLE_NAMES[mine.role] .. myGroupText(ev) .. "|r") or ""
         local rep = (ev.weekly or ev.series) and (C.dim .. " (weekly)|r") or ""
         local prac = ev.practice and (C.dim .. " [practice]|r") or ""
-        row.text:SetText(("%s%s|r  %s%s%s  %s%s"):format(C.gold, whenText(ev.at), ev.title, rep, prac, needText(ev), status))
+        row.text:SetText(("%s%s|r  %s%s%s  %s%s%s"):format(C.gold, whenText(ev.at), ev.title, rep, prac, needText(ev), status, rallyText(ev)))
         row.tip = eventTooltip(ev)
         row.t:SetScript("OnClick", function() M:SignUp(ev.id, "T") end)
         row.h:SetScript("OnClick", function() M:SignUp(ev.id, "H") end)
@@ -710,16 +987,113 @@ local function refreshReserves()
     ui.srList:SetItems(items)
 end
 
+-- Bounties sub-page (from RUIN Warfront): post, claim, witness.
+local function buildBounties(page)
+    ui.bountyPage = page
+    ui.bountyCard = W.Card(page)
+    ui.bountyCard:SetPoint("TOPLEFT", 0, 0)
+    ui.bountyCard:SetPoint("RIGHT", page, "RIGHT", -4, 0)
+    ui.bountyCard:SetHeight(58)
+    local f = ui.bountyCard
+    local h = W.Header(f, "Post a bounty")
+    h:SetPoint("TOPLEFT", 8, -6)
+    local kind = W.Cycle(f, 80, { "Guild", "Player" }, function() return ui.bKind end, function(v) ui.bKind = v end)
+    kind:SetPoint("TOPLEFT", 8, -26)
+    local target = W.EditBox(f, 190)
+    target:SetPoint("LEFT", kind, "RIGHT", 10, 0)
+    local rl = W.Label(f, C.dim .. "reward|r", "GameFontHighlightSmall")
+    rl:SetPoint("LEFT", target, "RIGHT", 8, 0)
+    local reward = W.EditBox(f, 110)
+    reward:SetPoint("LEFT", rl, "RIGHT", 6, 0)
+    local post = W.Button(f, "Post", 64, function()
+        M:PostBounty(target:GetText(), ui.bKind, reward:GetText())
+        target:SetText(""); reward:SetText("")
+    end)
+    post:SetPoint("LEFT", reward, "RIGHT", 8, 0)
+
+    ui.bountyHeader = W.Header(page, "Open bounties")
+    ui.bountyList = W.List(page, 24, function(row)
+        row.text = W.Label(row, "")
+        row.text:SetPoint("LEFT", 4, 0)
+        row.text:SetPoint("RIGHT", row, "RIGHT", -70, 0)
+        row.text:SetWordWrap(false)
+        row.del = W.Button(row, "Remove", 66)
+        row.del:SetPoint("RIGHT", 0, 0)
+    end, function(row, b)
+        local kills = 0
+        for _, c in pairs(db.claims) do if c.b == b.id and c.confirmed then kills = kills + 1 end end
+        row.text:SetText(("%s%s|r %s%s|r%s  %s· by %s · %s left|r%s%s"):format(C.dim, b.kind == "Player" and "player" or "guild",
+            C.gold, b.target, (b.reward or "") ~= "" and ("  " .. C.good .. b.reward .. "|r") or "", C.dim, tostring(b.by),
+            W.Duration((b.exp or 0) - GetServerTime()), kills > 0 and ("  ·  " .. kills .. " confirmed kill" .. (kills == 1 and "" or "s")) or "",
+            b.practice and (C.dim .. " [practice]|r") or ""))
+        row.del:SetShown(canPost())
+        row.del:SetScript("OnClick", function() M:RemoveBounty(b.id) end)
+    end)
+    ui.bountyList:SetEmptyText("No bounties posted. Officers can put a price on a rival guild or player.")
+
+    ui.claimBtn = W.Button(page, "Claim kill on target", 170, function() M:ClaimKill() end)
+    ui.claimHeader = W.Header(page, "Claims")
+    ui.claimList = W.List(page, 24, function(row)
+        row.text = W.Label(row, "")
+        row.text:SetPoint("LEFT", 4, 0)
+        row.text:SetPoint("RIGHT", row, "RIGHT", -84, 0)
+        row.text:SetWordWrap(false)
+        row.ok = W.Button(row, "Confirm", 80)
+        row.ok:SetPoint("RIGHT", 0, 0)
+    end, function(row, c)
+        local state = c.confirmed and (C.good .. "confirmed by " .. R.Util.ShortName(c.confirmed) .. "|r")
+            or (C.gold .. "needs a witness · " .. W.Duration(CLAIM_SECONDS - (GetServerTime() - (c.t or 0))) .. " left|r")
+        row.text:SetText(("%s killed %s%s|r%s  %s"):format(W.ClassName(c.by), C.white, c.v,
+            c.vg and (C.dim .. " <" .. c.vg .. ">|r") or "", state))
+        local mine = R.Util.ShortName(c.by or "") == R.Util.ShortName(UnitName("player") or "")
+        row.ok:SetShown(not c.confirmed and not mine)
+        row.ok:SetScript("OnClick", function() M:Confirm(c.id) end)
+    end)
+    ui.claimList:SetEmptyText("Kill a bountied enemy, target the body and press Claim. Another RUIN member who saw it confirms.")
+
+    -- The faction-wide war lives in Overlord Forever.
+    ui.ovLine = W.Label(page, "", "GameFontHighlightSmall")
+    ui.ovLine:SetPoint("BOTTOMLEFT", 0, 4)
+    ui.ovLine:SetPoint("RIGHT", page, "RIGHT", -110, 0)
+    ui.ovLine:SetWordWrap(false)
+    ui.ovBtn = W.Button(page, "Open Overlord", 104, function() R:OpenOverlord() end)
+    ui.ovBtn:SetPoint("BOTTOMRIGHT", 0, 0)
+end
+
+local function layoutBounties()
+    local officer = canPost()
+    ui.bountyCard:SetShown(officer)
+    local top = officer and -66 or 0
+    ui.bountyHeader:ClearAllPoints()
+    ui.bountyHeader:SetPoint("TOPLEFT", 0, top - 2)
+    ui.bountyList.frame:ClearAllPoints()
+    ui.bountyList.frame:SetPoint("TOPLEFT", 0, top - 20)
+    ui.bountyList.frame:SetPoint("RIGHT", ui.bountyPage, "RIGHT", -24, 0)
+    ui.bountyList.frame:SetHeight(officer and 110 or 160)
+    ui.claimBtn:ClearAllPoints()
+    ui.claimBtn:SetPoint("TOPRIGHT", ui.bountyList.frame, "BOTTOMRIGHT", 24, -8)
+    ui.claimHeader:ClearAllPoints()
+    ui.claimHeader:SetPoint("TOPLEFT", ui.bountyList.frame, "BOTTOMLEFT", 0, -12)
+    ui.claimList.frame:ClearAllPoints()
+    ui.claimList.frame:SetPoint("TOPLEFT", ui.claimHeader, "BOTTOMLEFT", 0, -10)
+    ui.claimList.frame:SetPoint("BOTTOMRIGHT", ui.bountyPage, "BOTTOMRIGHT", -24, 30)
+    local hasOv = R:HasOverlord()
+    ui.ovLine:SetText(C.dim .. (hasOv and "Faction-wide campaign, keeps, captures and Most Wanted: Overlord Forever."
+        or "For the faction-wide world PvP campaign, RUIN works alongside Overlord Forever (not installed).") .. "|r")
+    ui.ovBtn:SetShown(hasOv)
+end
+
 local function buildPage(panel)
     ui.panel = panel
     ui.practiceCheck = W.Check(panel, "Practice mode", function() return db.practice end,
         function(v) M:SetPractice(v) end)
     ui.practiceCheck:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -110, 2)
-    ui.tabs = W.SubTabs(panel, { "Events", "Roster", "Reserves" }, function() refreshPage() end)
+    ui.tabs = W.SubTabs(panel, { "Events", "Roster", "Reserves", "Bounties" }, function() refreshPage() end)
     ui.eventsPage = ui.tabs.pages[1]
     buildEvents(ui.tabs.pages[1])
     buildRoster(ui.tabs.pages[2])
     buildReserves(ui.tabs.pages[3])
+    buildBounties(ui.tabs.pages[4])
 
     refreshPage = function()
         if not ui.panel:IsVisible() then return end
@@ -733,7 +1107,13 @@ local function buildPage(panel)
             refreshRoster()
         elseif tab == 3 then
             refreshReserves()
+        elseif tab == 4 then
+            layoutBounties()
+            ui.bountyList:SetItems(activeBounties())
+            ui.claimList:SetItems(openClaims())
         end
+        local nb = #activeBounties()
+        ui.tabs:SetLabel(4, nb > 0 and ("Bounties (" .. nb .. ")") or "Bounties")
     end
     panel:SetScript("OnShow", function() refreshPage() end)
     ui.tabs:Select(1)
@@ -752,7 +1132,12 @@ function M:OnEnable()
     self:Listen("DELETE", "OnDelete")
     self:Listen("ROSTER", "OnRoster")
     self:Listen("ASK", "OnAsk")
+    self:Listen("BOUNTY", "OnBounty")
+    self:Listen("BDEL", "OnBountyDelete")
+    self:Listen("CLAIM", "OnClaim")
+    self:Listen("CONFIRM", "OnConfirm")
     self:AddTab("Muster", buildPage)
+    R:Subscribe("Intel:SPOT", onIntelSpot)
 
     R:Subscribe("CHANNELS_CHANGED", function()
         C_Timer.After(6, function() if R:IsConnected() then self:Send("ASK", {}, "ORG") end end)
@@ -761,13 +1146,35 @@ function M:OnEnable()
 end
 
 function RUIN_Muster_Open() M:OpenTab() end
+function RUIN_Muster_Claim() M:ClaimKill() end
 BINDING_HEADER_RUIN_MUSTER = "RUIN Muster"
 BINDING_NAME_RUIN_MUSTER_OPEN = "Open Muster"
+BINDING_NAME_RUIN_MUSTER_CLAIM = "Muster: claim bounty kill on target"
 
+-- /muster [practice | rally <name> | bounty guild|player <name> (reward) | claim | confirm | pins]
 SLASH_RUINMUSTER1 = "/muster"
-SlashCmdList.RUINMUSTER = function(msg)
-    if (msg or ""):lower():match("^%s*practice") then
+SlashCmdList.RUINMUSTER = function(input)
+    input = input or ""
+    local cmd, rest = input:match("^%s*(%S*)%s*(.-)%s*$")
+    cmd = (cmd or ""):lower()
+    if cmd == "practice" then
         M:SetPractice(not db.practice)
+    elseif cmd == "rally" then
+        M:Rally(rest)
+    elseif cmd == "bounty" then
+        local kind, target = rest:match("^(%S+)%s+(.+)$")
+        kind = kind and kind:lower()
+        if kind ~= "guild" and kind ~= "player" then return M:Print("Usage: /muster bounty guild|player <name> (reward)") end
+        local name, reward = target:match("^(.-)%s*%((.-)%)%s*$")
+        M:PostBounty(name or target, kind == "player" and "Player" or "Guild", reward)
+    elseif cmd == "claim" then
+        M:ClaimKill()
+    elseif cmd == "confirm" then
+        M:Confirm()
+    elseif cmd == "pins" then
+        db.pins = not db.pins
+        updatePins()
+        M:Print("Rally pins " .. (db.pins and "on." or "off."))
     else
         M:OpenTab()
     end
