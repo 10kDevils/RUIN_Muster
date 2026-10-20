@@ -6,6 +6,16 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
+## 0.3.7 — 2026-10-19
+
+1 change since 0.3.6 (needs RUIN Core 0.3.12):
+
+1. **Tidier pages, in Muster's color.**
+   - Events: the event list comes first. Officers press *New event* to open the form (title and description hints, Type and Size choices, Needs with role icons). Role buttons say what they do on hover, *Leave* shows only for events you signed up for, and *Del* is now *Delete*. Practice mode moved from the sub-tab bar onto the Events page, for members who want to try posting.
+   - Sightings: the report card is shorter, and the six alert check boxes moved into an *Alerts* button.
+   - Timers: buff rows read *Drops in [ ] min, Announce, Now*, with a hover line explaining each.
+   - Bounties: *On a: Guild / Player*, with hints for the name and the reward.
+
 ## 0.3.6 — 2026-10-19
 
 1 change since 0.3.5:

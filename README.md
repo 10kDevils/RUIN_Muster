@@ -11,13 +11,13 @@ Part of the **RUIN Gaming Companion App**. Requires **RUIN Core** (0.3.0 or late
 - **Timers:** world boss kills and world buff drops (`/muster timer songflower`, `/muster timer dragonslayer 5`), shared with the org. Respawn windows are Classic's, as a guide.
 - **Bounties:** officers put a price on a rival guild or player (Bounties page, or `/muster bounty guild|player <name> (reward)`). Kill one, target the body and press *Claim kill on target* (`/muster claim` or the key binding); another RUIN member nearby confirms (`/muster confirm`). You can't confirm your own kill.
 - **World PvP:** the faction-wide campaign, keeps, captures and Most Wanted belong to **Overlord Forever**, which RUIN uses instead of its old Warfront addon. The Bounties page opens Overlord when it's installed.
-- **Posting (officers):** title, start time, type, size and how many tanks, healers and DPS are needed (filled in from the size), an optional description, and *Weekly* to repeat it.
+- **Posting (officers):** press *New event* above the list, then fill in title, start time, type, size and how many tanks, healers and DPS are needed (filled in from the size), an optional description, and *Weekly* to repeat it.
 - **Signing up:** the role buttons sign you up, X withdraws. Each event shows have/need per role; hover it for the description and who's coming.
 - **Weekly events:** once a weekly event starts, next week's is posted by itself.
 - **Roster (officers):** *Auto-fill* spreads tanks and healers across groups of five and sends anyone past the size to the bench. Click a name to move it, then *Send roster*; members get an alert with their group.
 - **Soft reserves:** sign up, then shift-click an item (or type its name) on the Reserves page. Everyone sees who reserved what, and clashes are counted.
 - **Reminders:** an alert 15 minutes before an event you signed up for, with your group.
-- **Practice mode:** tick *Practice mode* or `/muster practice` to post and sign up alone; practice events stay on your screen.
+- **Practice mode:** tick *Practice mode* on the Events page or type `/muster practice` to post and sign up alone; practice events stay on your screen.
 
 ## What it shares with RUIN
 Events officers post (with descriptions, sizes, needs and rally points), sign-ups with role and soft reserve, rosters, bounties, kill claims with where they happened, and confirmations.

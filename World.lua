@@ -8,7 +8,7 @@
 -- tracks world bosses and world buff drops.
 local ADDON, ns = ...
 local R = RUIN_API
-if not R or (R.apiLevel or 1) < 5 then return end
+if not R or (R.apiLevel or 1) < 6 then return end
 local W = R.Widgets
 local C = W.COLORS
 
@@ -251,13 +251,13 @@ function World.BuildSightings(page)
     local card = W.Card(page)
     card:SetPoint("TOPLEFT", 0, 0)
     card:SetPoint("RIGHT", page, "RIGHT", -4, 0)
-    card:SetHeight(108)
-    local h = W.Header(card, "Report what you see (your location is added)")
+    card:SetHeight(86)
+    local h = W.Header(card, "Report what you see")
     h:SetPoint("TOPLEFT", 8, -6)
-    local note = W.EditBox(card, 260)
-    note:SetPoint("TOPLEFT", 12, -26)
-    local hint = W.Label(card, C.dim .. "optional detail, e.g. \"8 Horde, heading north\"|r", "GameFontHighlightSmall")
-    hint:SetPoint("LEFT", note, "RIGHT", 10, 0)
+    local where = W.Label(card, C.dim .. "Your location is added. Every RUIN member gets an alert and a map pin.|r", "GameFontHighlightSmall")
+    where:SetPoint("LEFT", h, "RIGHT", 12, 0)
+    local note = W.EditBox(card, 360, nil, "Optional detail, e.g. 8 Horde heading north")
+    note:SetPoint("TOPLEFT", 10, -26)
 
     local prev
     for i, k in ipairs(KINDS) do
@@ -265,26 +265,23 @@ function World.BuildSightings(page)
             World.Report(k.key, note:GetText())
             note:SetText("")
         end)
-        if prev then b:SetPoint("LEFT", prev, "RIGHT", 3, 0) else b:SetPoint("TOPLEFT", 8, -52) end
+        if prev then b:SetPoint("LEFT", prev, "RIGHT", 3, 0) else b:SetPoint("TOPLEFT", 8, -54) end
         prev = b
     end
 
-    local al = W.Label(card, C.gold .. "Alerts for|r", "GameFontNormalSmall")
-    al:SetPoint("TOPLEFT", 8, -86)
-    local x = 70
-    for _, k in ipairs(KINDS) do
+    local h3 = W.Header(page, "Sightings in the last 30 minutes")
+    h3:SetPoint("TOPLEFT", 0, -98)
+    local alertsBtn = W.Button(page, "Alerts", 80)
+    alertsBtn:SetPoint("TOPRIGHT", page, "TOPRIGHT", 0, -94)
+    local pop = W.Popover(alertsBtn, 230, 34 + 22 * #KINDS, "Alert me for")
+    for i, k in ipairs(KINDS) do
         local key = k.key
-        local c = W.Check(card, k.label, function() return db.world.alerts[key] end, function(v) db.world.alerts[key] = v end)
-        c:SetScale(0.9)
-        c:SetPoint("TOPLEFT", x / 0.9, -80 / 0.9)
-        x = x + 98
+        local c = W.Check(pop, k.label, function() return db.world.alerts[key] end, function(v) db.world.alerts[key] = v end)
+        c:SetPoint("TOPLEFT", 6, -24 - (i - 1) * 22)
     end
-
-    local h3 = W.Header(page, "Sightings (last 30 minutes)")
-    h3:SetPoint("TOPLEFT", 0, -118)
     local pins = W.Check(page, "Map pins", function() return db.world.pins end,
         function(v) db.world.pins = v; refreshPins() end)
-    pins:SetPoint("TOPRIGHT", page, "TOPRIGHT", -90, -112)
+    pins:SetPoint("RIGHT", alertsBtn, "LEFT", -80, 0)
     ui.list = W.List(page, 22, function(row)
         row.icon = row:CreateTexture(nil, "ARTWORK")
         row.icon:SetSize(16, 16)
@@ -314,7 +311,7 @@ function World.BuildSightings(page)
         end
     end)
     ui.list:SetEmptyText("All quiet. Reports from any RUIN member show up here, on your map and minimap.")
-    ui.list.frame:SetPoint("TOPLEFT", 0, -136)
+    ui.list.frame:SetPoint("TOPLEFT", 0, -122)
     ui.list.frame:SetPoint("BOTTOMRIGHT", page, "BOTTOMRIGHT", -24, 0)
 end
 
@@ -322,7 +319,7 @@ function World.BuildTimers(page)
     local h = W.Header(page, "World bosses and world buffs")
     h:SetPoint("TOPLEFT", 0, -2)
     local sub = W.Label(page, C.dim .. "Press Now when a boss dies or a buff drops, or announce a buff drop ahead of time. Respawn windows are WoW Classic's, as a guide.|r", "GameFontHighlightSmall")
-    sub:SetPoint("TOPLEFT", 0, -20)
+    sub:SetPoint("TOPLEFT", 0, -24)
     sub:SetPoint("RIGHT", page, "RIGHT", -6, 0)
     ui.timers = W.List(page, 40, function(row)
         row.icon = row:CreateTexture(nil, "ARTWORK")
@@ -330,21 +327,23 @@ function World.BuildTimers(page)
         row.icon:SetPoint("LEFT", 6, 0)
         row.name = W.Label(row, "", "GameFontNormal")
         row.name:SetPoint("TOPLEFT", row.icon, "TOPRIGHT", 8, 2)
-        row.name:SetPoint("RIGHT", row, "RIGHT", -190, 0)
+        row.name:SetPoint("RIGHT", row, "RIGHT", -260, 0)
         row.name:SetWordWrap(false)
         row.status = W.Label(row, "", "GameFontHighlightSmall")
         row.status:SetPoint("TOPLEFT", row.name, "BOTTOMLEFT", 0, -3)
-        row.status:SetPoint("RIGHT", row, "RIGHT", -190, 0)
+        row.status:SetPoint("RIGHT", row, "RIGHT", -260, 0)
         row.status:SetWordWrap(false)
         row.now = W.Button(row, "Now", 50)
         row.now:SetPoint("RIGHT", -4, 0)
-        row.go = W.Button(row, "In", 34)
-        row.go:SetPoint("RIGHT", row.now, "LEFT", -6, 0)
-        row.mins = W.EditBox(row, 34)
-        row.mins:SetPoint("RIGHT", row.go, "LEFT", -6, 0)
-        if row.mins.SetNumeric then row.mins:SetNumeric(true) end
+        row.go = W.Button(row, "Announce", 78)
+        row.go:SetPoint("RIGHT", row.now, "LEFT", -10, 0)
         row.minsLabel = W.Label(row, C.dim .. "min|r", "GameFontHighlightSmall")
-        row.minsLabel:SetPoint("LEFT", row.mins, "RIGHT", 1, 0)
+        row.minsLabel:SetPoint("RIGHT", row.go, "LEFT", -6, 0)
+        row.mins = W.EditBox(row, 34)
+        row.mins:SetPoint("RIGHT", row.minsLabel, "LEFT", -4, 0)
+        if row.mins.SetNumeric then row.mins:SetNumeric(true) end
+        row.inLabel = W.Label(row, C.dim .. "Drops in|r", "GameFontHighlightSmall")
+        row.inLabel:SetPoint("RIGHT", row.mins, "LEFT", -5, 0)
     end, function(row, t)
         row.icon:SetTexture(KIND[t.kind].icon)
         row.name:SetText(t.label .. "  " .. C.dim .. t.where .. "|r")
@@ -353,6 +352,7 @@ function World.BuildTimers(page)
         row.go:SetShown(buff)
         row.mins:SetShown(buff)
         row.minsLabel:SetShown(buff)
+        row.inLabel:SetShown(buff)
         row.now:SetScript("OnClick", function() World.SetTimer(t.key) end)
         row.go:SetScript("OnClick", function()
             local m = tonumber(row.mins:GetText())
@@ -362,6 +362,8 @@ function World.BuildTimers(page)
         row.tip = function(tip)
             tip:AddLine(t.label, 1, 0.82, 0)
             tip:AddLine(t.where, 1, 1, 1)
+            tip:AddLine(t.kind == "boss" and "Now: it was killed just now." or
+                "Now: it dropped just now.  Announce: it drops in the minutes you type.", 0.7, 0.75, 0.8, true)
             if rec and rec.by then tip:AddLine("Last report by " .. short(rec.by), 0.7, 0.7, 0.7) end
         end
     end)

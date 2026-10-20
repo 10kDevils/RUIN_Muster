@@ -13,14 +13,14 @@
 -- campaign, keeps, captures and Most Wanted are left to Overlord.
 local ADDON, ns = ...
 local R = RUIN_API
-if not R or (R.apiLevel or 1) < 5 then
-    print("|cff54b7d9[RUIN]|r Muster needs a newer RUIN Core (0.3.9 or later).")
+if not R or (R.apiLevel or 1) < 6 then
+    print("|cff54b7d9[RUIN]|r Muster needs a newer RUIN Core (0.3.12 or later).")
     return
 end
 local W = R.Widgets
 local C = W.COLORS
 
-local M = R:RegisterModule("Muster", { version = "0.3.6" })
+local M = R:RegisterModule("Muster", { version = "0.3.7" })
 
 local KINDS = { "Raid", "Dungeon", "PvP", "Leveling", "Social" }
 local SIZES = { "Open", "5", "10", "20", "40" }
@@ -719,71 +719,108 @@ end
 
 -- Events sub-page: post form (officers) and the list with sign-up buttons.
 local function buildEvents(page)
+    -- Top line: the list's title, practice mode, and (for whoever can post) New event.
+    ui.listHeader = W.Header(page, "Upcoming events")
+    ui.listHeader:SetPoint("TOPLEFT", 0, -4)
+    ui.newBtn = W.Button(page, "New event", 96, function()
+        ui.formOpen = not ui.formOpen
+        refreshPage()
+    end)
+    ui.newBtn:SetPoint("TOPRIGHT", page, "TOPRIGHT", 0, 0)
+    ui.practiceCheck = W.Check(page, "Practice mode", function() return db.practice end,
+        function(v) M:SetPractice(v); refreshPage() end)
+    ui.practiceCheck.label:SetFontObject(GameFontHighlightSmall)
+    ui.practiceCheck:SetPoint("RIGHT", ui.newBtn, "LEFT", -96, 0)
+    ui.practiceCheck:SetScript("OnEnter", function(self)
+        W.SetBorder(self.box, "glow")
+        if not GameTooltip then return end
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:AddLine("Practice mode", 1, 1, 1)
+        GameTooltip:AddLine("Try posting events, rallies and bounties. Practice items stay on your screen only.", 0.8, 0.8, 0.8, true)
+        GameTooltip:Show()
+    end)
+    ui.practiceCheck:SetScript("OnLeave", function(self) W.SetBorder(self.box, "border"); if GameTooltip then GameTooltip:Hide() end end)
+
+    -- The form, shown under the top line while New event is open.
     ui.officer = W.Card(page)
-    ui.officer:SetPoint("TOPLEFT", 0, 0)
+    ui.officer:SetPoint("TOPLEFT", 0, -28)
     ui.officer:SetPoint("RIGHT", page, "RIGHT", -4, 0)
-    ui.officer:SetHeight(84)
+    ui.officer:SetHeight(92)
     local f = ui.officer
-    local h = W.Header(f, "Post an event")
+    local h = W.Header(f, "New event")
     h:SetPoint("TOPLEFT", 8, -6)
-    local labels = { { "Title", 8 }, { "Starts (local time)", 214 }, { "Type", 352 }, { "Size", 448 }, { "Need T / H / D", 530 } }
-    for _, l in ipairs(labels) do
-        local fs = W.Label(f, C.dim .. l[1] .. "|r", "GameFontHighlightSmall")
-        fs:SetPoint("TOPLEFT", l[2], -24)
-    end
-    local title = W.EditBox(f, 196)
-    title:SetPoint("TOPLEFT", 12, -38)
-    local when = W.EditBox(f, 126)
-    when:SetPoint("TOPLEFT", 218, -38)
+    local title = W.EditBox(f, 220, nil, "Event title, e.g. Molten Core")
+    title:SetPoint("TOPLEFT", 10, -28)
+    local wl = W.Label(f, C.dim .. "Starts|r", "GameFontHighlightSmall")
+    wl:SetPoint("LEFT", title, "RIGHT", 10, 0)
+    local when = W.EditBox(f, 124)
+    when:SetPoint("LEFT", wl, "RIGHT", 6, 0)
     when:SetText(defaultWhen())
-    local kind = W.Cycle(f, 88, KINDS, function() return ui.kind end, function(v) ui.kind = v end)
-    kind:SetPoint("TOPLEFT", 352, -37)
+    local kind = W.Cycle(f, 108, KINDS, function() return ui.kind end, function(v) ui.kind = v end, "Type: ")
+    kind:SetPoint("LEFT", when, "RIGHT", 10, 0)
     local needBoxes = {}
-    local size = W.Cycle(f, 70, SIZES, function() return ui.size end, function(v)
+    local size = W.Cycle(f, 100, SIZES, function() return ui.size end, function(v)
         ui.size = v
         local d = NEED_FOR[v] or { 0, 0, 0 }
         for i = 1, 3 do ui.need[i] = d[i]; needBoxes[i]:SetText(d[i] > 0 and tostring(d[i]) or "") end
-    end)
-    size:SetPoint("TOPLEFT", 448, -37)
-    for i = 1, 3 do
+    end, "Size: ")
+    size:SetPoint("LEFT", kind, "RIGHT", 6, 0)
+    size.tipTitle = "Group size; fills in how many tanks, healers and DPS are needed"
+
+    local desc = W.EditBox(f, 220, nil, "Description (optional)")
+    desc:SetPoint("TOPLEFT", 10, -58)
+    local nl = W.Label(f, C.dim .. "Needs|r", "GameFontHighlightSmall")
+    nl:SetPoint("LEFT", desc, "RIGHT", 10, 0)
+    local prev = nl
+    for i, role in ipairs({ "T", "H", "D" }) do
+        local icon = W.Label(f, W.RoleIcon(role, 14))
+        icon:SetPoint("LEFT", prev, "RIGHT", i == 1 and 6 or 8, 0)
         local b = W.EditBox(f, 30, function(t) ui.need[i] = tonumber(t) or 0 end)
-        b:SetPoint("TOPLEFT", 534 + (i - 1) * 38, -38)
+        b:SetPoint("LEFT", icon, "RIGHT", 3, 0)
         if b.SetNumeric then b:SetNumeric(true) end
         if b.SetMaxLetters then b:SetMaxLetters(2) end
         needBoxes[i] = b
+        prev = b
     end
-    local desc = W.EditBox(f, 330)
-    desc:SetPoint("TOPLEFT", 12, -62)
-    local descHint = W.Label(f, C.dim .. "description (optional)|r", "GameFontHighlightSmall")
-    descHint:SetPoint("LEFT", desc, "RIGHT", 6, 0)
     local weekly = W.Check(f, "Weekly", function() return ui.weekly end, function(v) ui.weekly = v end)
-    weekly:SetPoint("TOPLEFT", 456, -58)
+    weekly:SetPoint("LEFT", prev, "RIGHT", 10, 0)
     local rally = W.Check(f, "Rally here", function() return ui.rally end, function(v) ui.rally = v end)
-    rally:SetPoint("TOPLEFT", 540, -58)
-    local post = W.Button(f, "Post", 70, function()
+    rally:SetPoint("LEFT", weekly, "RIGHT", 52, 0)
+    local post = W.Button(f, "Post", 64, function()
         for i = 1, 3 do ui.need[i] = tonumber(needBoxes[i]:GetText()) or 0 end
         local ev = M:Create(title:GetText(), when:GetText(), { kind = ui.kind, desc = desc:GetText(), size = ui.size,
                                                              need = ui.need, weekly = ui.weekly, rally = ui.rally })
-        if ev then title:SetText(""); desc:SetText("") end
+        if ev then
+            title:SetText(""); desc:SetText("")
+            ui.formOpen = false
+            refreshPage()
+        end
     end)
-    post:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -60)
+    post:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -8, 8)
 
-    ui.listHeader = W.Header(page, "Upcoming events")
     ui.list = W.List(page, 30, function(row)
         row.text = W.Label(row, "")
         row.text:SetPoint("LEFT", 4, 0)
-        row.text:SetPoint("RIGHT", row, "RIGHT", -196, 0)
+        row.text:SetPoint("RIGHT", row, "RIGHT", -222, 0)
         row.text:SetWordWrap(false)
-        row.del = W.Button(row, "Del", 38)
+        row.del = W.Button(row, "Delete", 56)
         row.del:SetPoint("RIGHT", 0, 0)
-        row.no = W.Button(row, "X", 26)
+        row.no = W.Button(row, "Leave", 48)
         row.no:SetPoint("RIGHT", row.del, "LEFT", -4, 0)
-        row.d = W.Button(row, W.RoleIcon("D", 16), 34)
-        row.d:SetPoint("RIGHT", row.no, "LEFT", -2, 0)
-        row.h = W.Button(row, W.RoleIcon("H", 16), 34)
-        row.h:SetPoint("RIGHT", row.d, "LEFT", -2, 0)
-        row.t = W.Button(row, W.RoleIcon("T", 16), 34)
-        row.t:SetPoint("RIGHT", row.h, "LEFT", -2, 0)
+        local prevBtn = row.no
+        for _, role in ipairs({ "D", "H", "T" }) do
+            local key = role:lower()
+            row[key] = W.Button(row, W.RoleIcon(role, 16), 34)
+            row[key]:SetPoint("RIGHT", prevBtn, "LEFT", -2, 0)
+            row[key]:HookScript("OnEnter", function(self)
+                if not GameTooltip then return end
+                GameTooltip:SetOwner(self, "ANCHOR_TOP")
+                GameTooltip:AddLine("Sign up as " .. ROLE_NAMES[role], 1, 1, 1)
+                GameTooltip:Show()
+            end)
+            row[key]:HookScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+            prevBtn = row[key]
+        end
     end, function(row, ev)
         local mine = ev.signups[R:GetPlayerGUID() or ""]
         local status = mine and (C.good .. "  you: " .. ROLE_NAMES[mine.role] .. myGroupText(ev) .. "|r") or ""
@@ -795,24 +832,41 @@ local function buildEvents(page)
         row.h:SetScript("OnClick", function() M:SignUp(ev.id, "H") end)
         row.d:SetScript("OnClick", function() M:SignUp(ev.id, "D") end)
         row.no:SetScript("OnClick", function() M:SignUp(ev.id, nil) end)
-        row.del:SetShown(canPost())
+        -- line the buttons up from the right, without gaps for hidden ones
+        local right = nil
+        for _, b in ipairs({ row.del, row.no, row.d, row.h, row.t }) do
+            local show = (b ~= row.del or canPost()) and (b ~= row.no or mine ~= nil)
+            b:SetShown(show)
+            if show then
+                b:ClearAllPoints()
+                if right then b:SetPoint("RIGHT", right, "LEFT", b == row.no and -4 or -2, 0) else b:SetPoint("RIGHT", row, "RIGHT", 0, 0) end
+                right = b
+            end
+        end
         row.del:SetScript("OnClick", function() M:Delete(ev.id) end)
     end)
-    ui.list:SetEmptyText("No upcoming events. Officers post them above; they reach every RUIN guild.")
-    ui.list.frame:SetPoint("BOTTOMRIGHT", page, "BOTTOMRIGHT", -24, 22)
+    ui.list:SetEmptyText("No upcoming events yet. Officers post raid nights, PvP pushes and leveling groups here, for every RUIN guild.")
 
-    local foot = W.Label(page, C.dim .. "Role buttons sign you up, X withdraws. Hover an event for details and who's coming. Times are your local time.|r", "GameFontHighlightSmall")
+    local foot = W.Label(page, C.dim .. "Press a role to sign up. Hover an event for details and who's coming. Times are your local time.|r", "GameFontHighlightSmall")
     foot:SetPoint("BOTTOMLEFT", 0, 2)
     foot:SetPoint("RIGHT", page, "RIGHT", -6, 0)
 end
 
 local function layoutEvents()
-    local officer = canPost()
-    ui.officer:SetShown(officer)
-    ui.listHeader:ClearAllPoints()
-    ui.listHeader:SetPoint("TOPLEFT", 0, officer and -94 or -2)
+    local can = canPost()
+    if not can then ui.formOpen = false end
+    ui.newBtn:SetShown(can)
+    ui.newBtn:SetText(ui.formOpen and "Close" or "New event")
+    ui.practiceCheck:ClearAllPoints()
+    if can then
+        ui.practiceCheck:SetPoint("RIGHT", ui.newBtn, "LEFT", -96, 0)
+    else
+        ui.practiceCheck:SetPoint("TOPRIGHT", ui.eventsPage, "TOPRIGHT", -96, 0)
+    end
+    ui.practiceCheck:SetShown(not R:IsOfficer() or db.practice)
+    ui.officer:SetShown(ui.formOpen)
     ui.list.frame:ClearAllPoints()
-    ui.list.frame:SetPoint("TOPLEFT", 0, officer and -112 or -20)
+    ui.list.frame:SetPoint("TOPLEFT", 0, ui.formOpen and -130 or -30)
     ui.list.frame:SetPoint("BOTTOMRIGHT", ui.eventsPage, "BOTTOMRIGHT", -24, 22)
 end
 
@@ -826,7 +880,8 @@ local function pickedEvent()
 end
 
 local function eventPicker(page, onChange)
-    local b = W.Button(page, "", 300, nil)
+    local b = W.MarkChoice(W.Button(page, "", 300, nil))
+    b.tipTitle = "Which event"
     b:SetScript("OnClick", function(_, mouse)
         local _, items = pickedEvent()
         if #items == 0 then return end
@@ -878,7 +933,7 @@ local function buildRoster(page)
     local bh = W.Header(page, "Bench")
     bh:SetPoint("TOPLEFT", 0, -276)
     ui.bench = W.Label(page, "", "GameFontHighlightSmall")
-    ui.bench:SetPoint("TOPLEFT", 0, -294)
+    ui.bench:SetPoint("TOPLEFT", 0, -300)
     ui.bench:SetPoint("RIGHT", page, "RIGHT", -6, 0)
     ui.bench:SetJustifyV("TOP")
     ui.rosterHint = W.Label(page, "", "GameFontHighlightSmall")
@@ -1002,14 +1057,13 @@ local function buildBounties(page)
     local f = ui.bountyCard
     local h = W.Header(f, "Post a bounty")
     h:SetPoint("TOPLEFT", 8, -6)
-    local kind = W.Cycle(f, 80, { "Guild", "Player" }, function() return ui.bKind end, function(v) ui.bKind = v end)
+    local kind = W.Cycle(f, 118, { "Guild", "Player" }, function() return ui.bKind end, function(v) ui.bKind = v end, "On a: ")
     kind:SetPoint("TOPLEFT", 8, -26)
-    local target = W.EditBox(f, 190)
-    target:SetPoint("LEFT", kind, "RIGHT", 10, 0)
-    local rl = W.Label(f, C.dim .. "reward|r", "GameFontHighlightSmall")
-    rl:SetPoint("LEFT", target, "RIGHT", 8, 0)
-    local reward = W.EditBox(f, 110)
-    reward:SetPoint("LEFT", rl, "RIGHT", 6, 0)
+    kind.tipTitle = "Put the bounty on a whole guild or one player"
+    local target = W.EditBox(f, 200, nil, "Guild or player name")
+    target:SetPoint("LEFT", kind, "RIGHT", 8, 0)
+    local reward = W.EditBox(f, 150, nil, "Reward (optional)")
+    reward:SetPoint("LEFT", target, "RIGHT", 8, 0)
     local post = W.Button(f, "Post", 64, function()
         M:PostBounty(target:GetText(), ui.bKind, reward:GetText())
         target:SetText(""); reward:SetText("")
@@ -1090,9 +1144,6 @@ end
 
 local function buildPage(panel)
     ui.panel = panel
-    ui.practiceCheck = W.Check(panel, "Practice mode", function() return db.practice end,
-        function(v) M:SetPractice(v) end)
-    ui.practiceCheck:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -110, 2)
     ui.tabs = W.SubTabs(panel, { "Events", "Roster", "Reserves", "Bounties", "Sightings", "Timers" }, function() refreshPage() end)
     ui.eventsPage = ui.tabs.pages[1]
     buildEvents(ui.tabs.pages[1])
