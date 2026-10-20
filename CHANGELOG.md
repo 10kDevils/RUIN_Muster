@@ -6,6 +6,12 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
+## 0.3.5 — 2026-10-19
+
+1 change since 0.3.4:
+
+1. **New display name** (Events tab, Events & Rallies page), to match the RUIN Gaming Companion App brief and RUIN Core 0.3.10's new tab order. The addon list shows it as "Events (Muster)". The tabs now read in the brief's plain language. Only what players see changed: the addon folder, repository, command and saved-data names stay the same, so nothing needs reinstalling or re-setting.
+
 ## 0.3.4 — 2026-10-19
 
 RUIN Intel is retired and folded into Muster (needs RUIN Core 0.3.9). Muster already reacts to something happening in the world or plans a raid, which is what Intel was for.
