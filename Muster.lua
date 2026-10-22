@@ -13,14 +13,14 @@
 -- campaign, keeps, captures and Most Wanted are left to Overlord.
 local ADDON, ns = ...
 local R = RUIN_API
-if not R or (R.apiLevel or 1) < 6 then
-    print("|cff54b7d9[RUIN]|r Muster needs a newer RUIN Core (0.3.12 or later).")
+if not R or (R.apiLevel or 1) < 8 then
+    print("|cff54b7d9[RUIN]|r Muster needs a newer RUIN Core (0.3.15 or later).")
     return
 end
 local W = R.Widgets
 local C = W.COLORS
 
-local M = R:RegisterModule("Muster", { version = "0.3.7" })
+local M = R:RegisterModule("Muster", { version = "0.3.8" })
 
 local KINDS = { "Raid", "Dungeon", "PvP", "Leveling", "Social" }
 local SIZES = { "Open", "5", "10", "20", "40" }
@@ -42,6 +42,7 @@ ns.Muster = M
 
 local db
 local ui = { kind = "Raid", size = "Open", need = { 0, 0, 0 }, weekly = false, rally = false, bKind = "Guild" }
+ns.MusterUI = ui      -- for tests
 
 local ROLE_NAMES = { T = "Tank", H = "Healer", D = "DPS" }
 local ROLE_ORDER = { "T", "H", "D" }
@@ -50,16 +51,12 @@ local function newId()
     return tostring(R:GetPlayerGUID() or "x"):sub(-5) .. GetServerTime() % 100000 .. math.random(10, 99)
 end
 
+-- "2026-10-24 20:00", or epoch seconds from the form's time picker
 local function parseWhen(text)
+    if type(text) == "number" then return math.floor(text) end
     local y, mo, d, h, mi = (text or ""):match("(%d+)%-(%d+)%-(%d+)%s+(%d+):(%d+)")
     if not y then return nil end
     return time({ year = tonumber(y), month = tonumber(mo), day = tonumber(d), hour = tonumber(h), min = tonumber(mi) })
-end
-
-local function defaultWhen()
-    local t = date("*t", time() + 86400)
-    t.hour, t.min, t.sec = 20, 0, 0
-    return date("%Y-%m-%d %H:%M", time(t))
 end
 
 local function counts(ev)
@@ -85,7 +82,7 @@ local function validEvent(e)
     return type(e) == "table" and type(e.id) == "string" and type(e.title) == "string" and type(e.at) == "number"
 end
 
-local function whenText(at) return date("%a %d %b %H:%M", at) end
+local function whenText(at) return W.WhenText(at) end
 
 local refreshPage = function() end
 local changed
@@ -741,23 +738,21 @@ local function buildEvents(page)
     end)
     ui.practiceCheck:SetScript("OnLeave", function(self) W.SetBorder(self.box, "border"); if GameTooltip then GameTooltip:Hide() end end)
 
-    -- The form, shown under the top line while New event is open.
+    -- The form, shown under the top line while New event is open:
+    --   title, type, size / day, time, weekly, rally / description, needs, Post
     ui.officer = W.Card(page)
     ui.officer:SetPoint("TOPLEFT", 0, -28)
     ui.officer:SetPoint("RIGHT", page, "RIGHT", -4, 0)
-    ui.officer:SetHeight(92)
+    ui.officer:SetHeight(122)
     local f = ui.officer
     local h = W.Header(f, "New event")
     h:SetPoint("TOPLEFT", 8, -6)
-    local title = W.EditBox(f, 220, nil, "Event title, e.g. Molten Core")
-    title:SetPoint("TOPLEFT", 10, -28)
-    local wl = W.Label(f, C.dim .. "Starts|r", "GameFontHighlightSmall")
-    wl:SetPoint("LEFT", title, "RIGHT", 10, 0)
-    local when = W.EditBox(f, 124)
-    when:SetPoint("LEFT", wl, "RIGHT", 6, 0)
-    when:SetText(defaultWhen())
+    local title = W.EditBox(f, 250, nil, "Event title, e.g. Molten Core")
+    title:SetPoint("TOPLEFT", 64, -28)
+    local tl = W.Label(f, C.dim .. "Title|r", "GameFontHighlightSmall")
+    tl:SetPoint("RIGHT", title, "LEFT", -8, 0)
     local kind = W.Cycle(f, 108, KINDS, function() return ui.kind end, function(v) ui.kind = v end, "Type: ")
-    kind:SetPoint("LEFT", when, "RIGHT", 10, 0)
+    kind:SetPoint("LEFT", title, "RIGHT", 10, 0)
     local needBoxes = {}
     local size = W.Cycle(f, 100, SIZES, function() return ui.size end, function(v)
         ui.size = v
@@ -767,8 +762,19 @@ local function buildEvents(page)
     size:SetPoint("LEFT", kind, "RIGHT", 6, 0)
     size.tipTitle = "Group size; fills in how many tanks, healers and DPS are needed"
 
-    local desc = W.EditBox(f, 220, nil, "Description (optional)")
-    desc:SetPoint("TOPLEFT", 10, -58)
+    -- when: a day list and hour : minute AM/PM boxes (your local time)
+    local when = W.WhenPicker(f)
+    when:SetPoint("TOPLEFT", 64, -58)
+    ui.when = when
+    local wl = W.Label(f, C.dim .. "Starts|r", "GameFontHighlightSmall")
+    wl:SetPoint("RIGHT", when, "LEFT", -8, 0)
+    local tz = W.Label(f, C.dim .. "your time|r", "GameFontHighlightSmall")
+    tz:SetPoint("LEFT", when, "RIGHT", 8, 0)
+
+    local desc = W.EditBox(f, 250, nil, "Description (optional)")
+    desc:SetPoint("TOPLEFT", 64, -88)
+    local dl = W.Label(f, C.dim .. "About|r", "GameFontHighlightSmall")
+    dl:SetPoint("RIGHT", desc, "LEFT", -8, 0)
     local nl = W.Label(f, C.dim .. "Needs|r", "GameFontHighlightSmall")
     nl:SetPoint("LEFT", desc, "RIGHT", 10, 0)
     local prev = nl
@@ -783,13 +789,18 @@ local function buildEvents(page)
         prev = b
     end
     local weekly = W.Check(f, "Weekly", function() return ui.weekly end, function(v) ui.weekly = v end)
-    weekly:SetPoint("LEFT", prev, "RIGHT", 10, 0)
+    weekly:SetPoint("LEFT", tz, "RIGHT", 18, 0)
+    weekly.tip = "Post it again for the same day and time every week."
     local rally = W.Check(f, "Rally here", function() return ui.rally end, function(v) ui.rally = v end)
-    rally:SetPoint("LEFT", weekly, "RIGHT", 52, 0)
-    local post = W.Button(f, "Post", 64, function()
+    rally:SetPoint("LEFT", weekly, "RIGHT", 58, 0)
+    rally.tip = "Put a rally point on everyone's map where you stand now."
+    local post = W.Button(f, "Post", 72, function()
         for i = 1, 3 do ui.need[i] = tonumber(needBoxes[i]:GetText()) or 0 end
-        local ev = M:Create(title:GetText(), when:GetText(), { kind = ui.kind, desc = desc:GetText(), size = ui.size,
-                                                             need = ui.need, weekly = ui.weekly, rally = ui.rally })
+        local at, err = when:GetTime()
+        if not at then return M:Print("Check the start time: " .. tostring(err) .. ".") end
+        if at < GetServerTime() - 60 then return M:Print("That start time has already passed. Pick a later day or time.") end
+        local ev = M:Create(title:GetText(), at, { kind = ui.kind, desc = desc:GetText(), size = ui.size,
+                                                   need = ui.need, weekly = ui.weekly, rally = ui.rally })
         if ev then
             title:SetText(""); desc:SetText("")
             ui.formOpen = false
@@ -797,6 +808,7 @@ local function buildEvents(page)
         end
     end)
     post:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -8, 8)
+    ui.postBtn, ui.titleBox = post, title
 
     ui.list = W.List(page, 30, function(row)
         row.text = W.Label(row, "")
@@ -866,7 +878,7 @@ local function layoutEvents()
     ui.practiceCheck:SetShown(not R:IsOfficer() or db.practice)
     ui.officer:SetShown(ui.formOpen)
     ui.list.frame:ClearAllPoints()
-    ui.list.frame:SetPoint("TOPLEFT", 0, ui.formOpen and -130 or -30)
+    ui.list.frame:SetPoint("TOPLEFT", 0, ui.formOpen and -160 or -30)
     ui.list.frame:SetPoint("BOTTOMRIGHT", ui.eventsPage, "BOTTOMRIGHT", -24, 22)
 end
 

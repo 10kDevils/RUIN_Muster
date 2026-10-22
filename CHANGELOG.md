@@ -6,6 +6,12 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
+## 0.3.8 — 2026-10-21
+
+1 change since 0.3.7 (needs RUIN Core 0.3.15):
+
+1. **An easier New event form.** The start is picked from a day list (today and the next two weeks, shown as *Thu 10/22*), with separate hour and minute boxes and an AM / PM choice, all in your own time. The form is laid out in three rows (title, type and size / start, weekly and rally / description, needs and Post), and Post refuses a start time that has already passed. Event times everywhere in Muster read like *Thu 10/22 8:00 PM*.
+
 ## 0.3.7 — 2026-10-19
 
 1 change since 0.3.6 (needs RUIN Core 0.3.12):
