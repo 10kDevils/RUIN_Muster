@@ -1,5 +1,5 @@
 -- RUIN Muster
--- Officers post events (raids, PvP nights, leveling groups) for all of RUIN,
+-- Officers (and the ranks their guild allows) post events (raids, PvP nights, leveling groups) for all of RUIN,
 -- with a description, a size and how many tanks, healers and DPS are needed.
 -- Members sign up by role and get a reminder 15 minutes before the start.
 -- Weekly events post their next week by themselves. Officers arrange the
@@ -20,7 +20,7 @@ end
 local W = R.Widgets
 local C = W.COLORS
 
-local M = R:RegisterModule("Muster", { version = "0.3.8" })
+local M = R:RegisterModule("Muster", { version = "0.3.9" })
 
 local KINDS = { "Raid", "Dungeon", "PvP", "Leveling", "Social" }
 local SIZES = { "Open", "5", "10", "20", "40" }
@@ -124,13 +124,28 @@ end
 -- practice, and automatically while not connected to RUIN) anyone can post;
 -- practice events and their sign-ups stay on your own screen.
 local function practicing() return (db and db.practice) or not R:IsConnected() end
-local function canPost() return R:IsOfficer() or practicing() end
+-- Who may create events (rallies included): officers, plus the ranks their
+-- guild's officers allow under Options > Org > Guild settings (RUIN Core
+-- 0.3.17). Bounties stay with officers.
+local function canCreate()
+    if R.CanCreateEvents then return R:CanCreateEvents() end
+    return R:IsOfficer()
+end
+local function canPost() return canCreate() or practicing() end
+local function canBounty() return R:IsOfficer() or practicing() end
+-- Officers manage every event; other ranks allowed to create manage their own.
+local function canManage(ev)
+    if not ev then return false end
+    if R:IsOfficer() or practicing() or ev.practice then return true end
+    local me = R:GetPlayer()
+    return canCreate() and me ~= nil and ev.by == me.name
+end
 
 -- opts: { kind, desc, size, need = { t, h, d }, weekly }
 function M:Create(title, whenText_, opts)
     if type(opts) == "string" then opts = { kind = opts } end
     opts = opts or {}
-    if not canPost() then return self:Print("Only officers can post events.") end
+    if not canPost() then return self:Print("Your guild rank can't create events. Your guild's officers choose who can, under Options > Org.") end
     title = (title or ""):sub(1, 40)
     local at = parseWhen(whenText_)
     if title == "" or not at then return self:Print("Need a title and a time like 2026-10-24 20:00.") end
@@ -160,7 +175,7 @@ end
 
 function M:Delete(id)
     local ev = db.events[id]
-    if not canPost() or not ev then return end
+    if not ev or not canManage(ev) then return end
     db.events[id] = nil
     if not ev.practice then self:Send("DELETE", { id = id }, "ORG") end
     changed()
@@ -169,7 +184,7 @@ end
 -- Stop a weekly event from posting further weeks (this week stays).
 function M:StopRepeating(id)
     local ev = db.events[id]
-    if not canPost() or not ev or not ev.weekly then return end
+    if not ev or not canManage(ev) or not ev.weekly then return end
     ev.weekly, ev.t = false, GetServerTime()
     if not ev.practice then self:Send("EVENT", ev, "ORG") end
     self:Print(ev.title .. " will not repeat after this week.")
@@ -292,7 +307,7 @@ end
 -- then DPS into the free places. Anyone past the size goes to the bench.
 function M:AutoRoster(id)
     local ev = db.events[id]
-    if not ev or not canPost() then return end
+    if not ev or not canManage(ev) then return end
     local groups, cap = groupCount(ev), ev.size or 999
     local fill, roster, placed = {}, {}, 0
     for i = 1, groups do fill[i] = 0 end
@@ -320,7 +335,7 @@ end
 -- Move one player to the next group, then the bench, then group 1 again.
 function M:CycleGroup(id, guid)
     local ev = db.events[id]
-    if not ev or not canPost() or not ev.signups[guid] then return end
+    if not ev or not canManage(ev) or not ev.signups[guid] then return end
     ev.roster = ev.roster or {}
     local groups = groupCount(ev)
     local cur = ev.roster[guid] or 0
@@ -331,7 +346,7 @@ end
 
 function M:PublishRoster(id)
     local ev = db.events[id]
-    if not ev or not canPost() or not ev.roster then return end
+    if not ev or not canManage(ev) or not ev.roster then return end
     ev.rosterT = GetServerTime()
     if not ev.practice then
         self:Send("ROSTER", { id = id, r = ev.roster, t = ev.rosterT }, "ORG")
@@ -366,7 +381,7 @@ end
 -- from the series, so two officers doing it at once post the same event.
 local function rollWeekly(now)
     for _, ev in pairs(db.events) do
-        if ev.weekly and ev.at <= now and canPost() and (ev.practice or not practicing() or R:IsOfficer()) then
+        if ev.weekly and ev.at <= now and canManage(ev) and (ev.practice or not practicing() or R:IsOfficer()) then
             local week = (ev.week or 0) + 1
             local nid = (ev.series or ev.id) .. "w" .. week
             if not db.events[nid] then
@@ -421,7 +436,7 @@ function M:CanPost() return canPost() end
 -- A rally right now, where you stand (what Warfront's "Mark objective here"
 -- became): a PvP event starting this minute with a map pin for the org.
 function M:Rally(title)
-    if not canPost() then return self:Print("Only officers call rallies (or switch on practice mode).") end
+    if not canPost() then return self:Print("Your guild rank can't call rallies (or switch on practice mode). Your guild's officers choose who can.") end
     local pos = here()
     if not pos then return self:Print("Couldn't read your position here.") end
     title = R.Util.Trim(title or "")
@@ -445,7 +460,7 @@ end
 M.ActiveBounties = function() return activeBounties() end
 
 function M:PostBounty(target, kind, reward)
-    if not canPost() then return self:Print("Only officers can post bounties.") end
+    if not canBounty() then return self:Print("Only officers can post bounties.") end
     target = R.Util.Trim(target or ""):sub(1, 40)
     if target == "" then return self:Print("Name the guild or player for the bounty.") end
     local now = GetServerTime()
@@ -463,7 +478,7 @@ end
 
 function M:RemoveBounty(id)
     local b = db.bounties[id]
-    if not b or not canPost() then return end
+    if not b or not canBounty() then return end
     db.bounties[id] = nil
     if not b.practice then self:Send("BDEL", { id = id }, "ORG") end
     refreshPage()
@@ -847,7 +862,7 @@ local function buildEvents(page)
         -- line the buttons up from the right, without gaps for hidden ones
         local right = nil
         for _, b in ipairs({ row.del, row.no, row.d, row.h, row.t }) do
-            local show = (b ~= row.del or canPost()) and (b ~= row.no or mine ~= nil)
+            local show = (b ~= row.del or canManage(ev)) and (b ~= row.no or mine ~= nil)
             b:SetShown(show)
             if show then
                 b:ClearAllPoints()
@@ -857,7 +872,7 @@ local function buildEvents(page)
         end
         row.del:SetScript("OnClick", function() M:Delete(ev.id) end)
     end)
-    ui.list:SetEmptyText("No upcoming events yet. Officers post raid nights, PvP pushes and leveling groups here, for every RUIN guild.")
+    ui.list:SetEmptyText("No upcoming events yet. Officers (and the ranks they allow) post raid nights, PvP pushes and leveling groups here, for every RUIN guild.")
 
     local foot = W.Label(page, C.dim .. "Press a role to sign up. Hover an event for details and who's coming. Times are your local time.|r", "GameFontHighlightSmall")
     foot:SetPoint("BOTTOMLEFT", 0, 2)
@@ -956,7 +971,7 @@ end
 local function refreshRoster()
     local ev = pickedEvent()
     ui.rosterPick.Refresh()
-    local officer = canPost()
+    local officer = canManage(ev)
     ui.autoBtn:SetShown(officer and ev ~= nil)
     ui.sendBtn:SetShown(officer and ev ~= nil and ev.roster ~= nil)
     for i, card in ipairs(ui.groups) do
@@ -1097,7 +1112,7 @@ local function buildBounties(page)
             C.gold, b.target, (b.reward or "") ~= "" and ("  " .. C.good .. b.reward .. "|r") or "", C.dim, tostring(b.by),
             W.Duration((b.exp or 0) - GetServerTime()), kills > 0 and ("  ·  " .. kills .. " confirmed kill" .. (kills == 1 and "" or "s")) or "",
             b.practice and (C.dim .. " [practice]|r") or ""))
-        row.del:SetShown(canPost())
+        row.del:SetShown(canBounty())
         row.del:SetScript("OnClick", function() M:RemoveBounty(b.id) end)
     end)
     ui.bountyList:SetEmptyText("No bounties posted. Officers can put a price on a rival guild or player.")
@@ -1132,7 +1147,7 @@ local function buildBounties(page)
 end
 
 local function layoutBounties()
-    local officer = canPost()
+    local officer = canBounty()
     ui.bountyCard:SetShown(officer)
     local top = officer and -66 or 0
     ui.bountyHeader:ClearAllPoints()

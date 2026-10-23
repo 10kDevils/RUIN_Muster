@@ -6,6 +6,12 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
+## 0.3.9 — 2026-10-23
+
+1 change since 0.3.8:
+
+1. **Event creators follow your guild's setting.** Officers choose which ranks of their guild can create events and rallies (RUIN Core 0.3.17, Options → Org → Guild settings); members of those ranks can post events and manage and arrange their own (officers manage every event). Bounties stay with officers.
+
 ## 0.3.8 — 2026-10-21
 
 1 change since 0.3.7 (needs RUIN Core 0.3.15):
