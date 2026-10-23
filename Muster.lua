@@ -20,7 +20,7 @@ end
 local W = R.Widgets
 local C = W.COLORS
 
-local M = R:RegisterModule("Muster", { version = "0.3.9" })
+local M = R:RegisterModule("Muster", { version = "0.3.10" })
 
 local KINDS = { "Raid", "Dungeon", "PvP", "Leveling", "Social" }
 local SIZES = { "Open", "5", "10", "20", "40" }
@@ -125,7 +125,7 @@ end
 -- practice events and their sign-ups stay on your own screen.
 local function practicing() return (db and db.practice) or not R:IsConnected() end
 -- Who may create events (rallies included): officers, plus the ranks their
--- guild's officers allow under Options > Org > Guild settings (RUIN Core
+-- guild's officers allow under Settings > Org > Guild settings (RUIN Core
 -- 0.3.17). Bounties stay with officers.
 local function canCreate()
     if R.CanCreateEvents then return R:CanCreateEvents() end
@@ -145,7 +145,7 @@ end
 function M:Create(title, whenText_, opts)
     if type(opts) == "string" then opts = { kind = opts } end
     opts = opts or {}
-    if not canPost() then return self:Print("Your guild rank can't create events. Your guild's officers choose who can, under Options > Org.") end
+    if not canPost() then return self:Print("Your guild rank can't create events. Your guild's officers choose who can, under Settings > Org.") end
     title = (title or ""):sub(1, 40)
     local at = parseWhen(whenText_)
     if title == "" or not at then return self:Print("Need a title and a time like 2026-10-24 20:00.") end

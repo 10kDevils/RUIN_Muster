@@ -6,6 +6,12 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
+## 0.3.10 — 2026-10-23
+
+1 change since 0.3.9:
+
+1. Messages and the README point to RUIN's Settings page (renamed from Options in RUIN Core 0.3.18).
+
 ## 0.3.9 — 2026-10-23
 
 1 change since 0.3.8:
