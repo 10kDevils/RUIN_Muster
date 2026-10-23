@@ -6,6 +6,10 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
+## 0.4.0 — 2026-10-23 · Beta 1
+
+The RUIN Gaming Companion App enters beta: every addon is now 0.4.0. Nothing changed since 0.3.10 apart from the version number. Report what you find under Settings → Feedback.
+
 ## 0.3.10 — 2026-10-23
 
 1 change since 0.3.9:
