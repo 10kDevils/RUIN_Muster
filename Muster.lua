@@ -555,7 +555,7 @@ function M:OnClaim(c, sender)
     db.claims[c.id] = c
     local near = type(c.map) == "number" and select(3, R.Map:Offset(c.map, c.x, c.y))
     if near and near <= WITNESS_YARDS then
-        self:Toast(("Did you see %s kill %s? Confirm on the Muster Bounties page or /muster confirm."):format(
+        self:Toast(("Did you see %s kill %s? Confirm on Muster > Wanted > Bounties or /muster confirm."):format(
             W.ClassName(sender), c.v), { sound = true })
     end
     refreshPage()
@@ -1181,7 +1181,7 @@ local function layoutBounties()
     ui.claimList.frame:SetPoint("TOPLEFT", ui.claimHeader, "BOTTOMLEFT", 0, -10)
     ui.claimList.frame:SetPoint("BOTTOMRIGHT", ui.bountyPage, "BOTTOMRIGHT", -24, 30)
     local hasOv = R:HasOverlord()
-    ui.ovLine:SetText(C.dim .. (hasOv and "Faction-wide campaign, keeps and captures: Overlord Forever. RUIN's own Most Wanted is on its tab."
+    ui.ovLine:SetText(C.dim .. (hasOv and "Faction-wide campaign, keeps and captures: Overlord Forever. RUIN's own list is under Most Wanted."
         or "For the faction-wide world PvP campaign, RUIN works alongside Overlord Forever (not installed).") .. "|r")
     ui.ovBtn:SetShown(hasOv)
 end
@@ -1197,61 +1197,79 @@ local internals = {
 }
 ns.MusterInternals = internals
 
-local TABS = { "Events", "Roster", "Reserves", "War Room", "Loot", "Bounties", "Wanted", "Sightings" }
+-- Five tabs: Events (post and sign up), Plan (the picked event's raid groups,
+-- squads and after-action report), Loot (soft reserves and drops), Wanted
+-- (Most Wanted and bounties) and Sightings.
+local TABS = { "Events", "Plan", "Loot", "Wanted", "Sightings" }
+local SUBS = { Plan = { "Groups", "Squads" }, Loot = { "Reserves", "Drops" }, Wanted = { "Most Wanted", "Bounties" } }
 local function tabIndex(name) for i, n in ipairs(TABS) do if n == name then return i end end end
+local sub = {}           -- top tab name -> its own sub-tabs
 
 local function buildPage(panel)
     ui.panel = panel
     ui.tabs = W.SubTabs(panel, TABS, function() refreshPage() end)
     ui.eventsPage = ui.tabs.pages[1]
     buildEvents(ui.tabs.pages[1])
-    buildRoster(ui.tabs.pages[2])
-    buildReserves(ui.tabs.pages[3])
-    ns.WarRoom.Build(ui.tabs.pages[4])
-    ns.Loot.Build(ui.tabs.pages[5])
-    buildBounties(ui.tabs.pages[6])
-    ns.Wanted.Build(ui.tabs.pages[7])
-    ns.World.BuildSightings(ui.tabs.pages[8])
+    for name, names in pairs(SUBS) do
+        sub[name] = W.SubTabs(ui.tabs.pages[tabIndex(name)], names, function() refreshPage() end)
+    end
+    buildRoster(sub.Plan.pages[1])
+    ns.WarRoom.Build(sub.Plan.pages[2])
+    buildReserves(sub.Loot.pages[1])
+    ns.Loot.Build(sub.Loot.pages[2])
+    ns.Wanted.Build(sub.Wanted.pages[1])
+    buildBounties(sub.Wanted.pages[2])
+    ns.World.BuildSightings(ui.tabs.pages[tabIndex("Sightings")])
+    for _, st in pairs(sub) do st:Select(1) end
 
     refreshPage = function()
         if not ui.panel:IsVisible() then return end
         local items = upcoming()
         ui.tabs:SetLabel(1, #items > 0 and ("Events (" .. #items .. ")") or "Events")
         local name = TABS[ui.tabs.selected]
+        local st = sub[name]
+        local page = st and SUBS[name][st.selected or 1]
         if name == "Events" then
             layoutEvents()
             ui.list:SetItems(items)
-        elseif name == "Roster" then
+        elseif page == "Groups" then
             refreshRoster()
-        elseif name == "Reserves" then
-            refreshReserves()
-        elseif name == "War Room" then
+        elseif page == "Squads" then
             ns.WarRoom.Refresh()
-        elseif name == "Loot" then
+        elseif page == "Reserves" then
+            refreshReserves()
+        elseif page == "Drops" then
             ns.Loot.Refresh()
-        elseif name == "Bounties" then
+        elseif page == "Most Wanted" then
+            ns.Wanted.Refresh()
+        elseif page == "Bounties" then
             layoutBounties()
             ui.bountyList:SetItems(activeBounties())
             ui.claimList:SetItems(openClaims())
-        elseif name == "Wanted" then
-            ns.Wanted.Refresh()
         elseif name == "Sightings" then
             ns.World.Refresh("sightings")
         end
         local nSight = #ns.World.Active()
         ui.tabs:SetLabel(tabIndex("Sightings"), nSight > 0 and ("Sightings (" .. nSight .. ")") or "Sightings")
-        local nb = #activeBounties()
-        ui.tabs:SetLabel(tabIndex("Bounties"), nb > 0 and ("Bounties (" .. nb .. ")") or "Bounties")
-        local nw = ns.Wanted.Count()
-        ui.tabs:SetLabel(tabIndex("Wanted"), nw > 0 and ("Wanted (" .. nw .. ")") or "Wanted")
+        local nb, nw = #activeBounties(), ns.Wanted.Count()
+        sub.Wanted:SetLabel(2, nb > 0 and ("Bounties (" .. nb .. ")") or "Bounties")
+        sub.Wanted:SetLabel(1, nw > 0 and ("Most Wanted (" .. nw .. ")") or "Most Wanted")
+        ui.tabs:SetLabel(tabIndex("Wanted"), (nw + nb) > 0 and ("Wanted (" .. (nw + nb) .. ")") or "Wanted")
     end
     panel:SetScript("OnShow", function() refreshPage() end)
     ui.tabs:Select(1)
 end
 
+-- "Events", "Plan", "Groups", "Squads", "Loot", "Reserves", "Drops", "Wanted", "Most Wanted", "Bounties", "Sightings"
 function M:SelectSubTab(name)
+    if not ui.tabs then return end
     local i = tabIndex(name)
-    if ui.tabs and i then ui.tabs:Select(i) end
+    if i then return ui.tabs:Select(i) end
+    for top, names in pairs(SUBS) do
+        for j, n in ipairs(names) do
+            if n == name then ui.tabs:Select(tabIndex(top)); sub[top]:Select(j); return end
+        end
+    end
 end
 
 ---------------------------------------------------------------------------
@@ -1319,7 +1337,7 @@ SlashCmdList.RUINMUSTER = function(input)
         end
     elseif cmd == "wanted" or cmd == "war" or cmd == "warroom" or cmd == "loot" then
         M:OpenTab()
-        M:SelectSubTab(cmd == "wanted" and "Wanted" or cmd == "loot" and "Loot" or "War Room")
+        M:SelectSubTab(cmd == "wanted" and "Most Wanted" or cmd == "loot" and "Drops" or "Squads")
     elseif cmd == "pins" then
         db.pins = not db.pins
         updatePins()

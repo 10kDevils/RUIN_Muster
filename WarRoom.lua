@@ -148,7 +148,7 @@ end
 
 function WarRoom.Build(page)
     ui.page = page
-    local h = W.Header(page, "Operation")
+    local h = W.Header(page, "Event")
     h:SetPoint("TOPLEFT", 0, -2)
     ui.pick = MC.eventPicker(page, function() ui.sel = nil; WarRoom.Refresh() end)
     ui.pick:SetPoint("TOPLEFT", 80, 2)
@@ -273,7 +273,10 @@ function WarRoom.Refresh()
     if not ev then
         ui.orders:SetText(C.dim .. "No upcoming events. Post one on the Events tab, then plan it here.|r")
         ui.list:SetItems({})
-        ui.cardTitle:SetText(""); ui.cardText:SetText(""); ui.aarText:SetText(""); ui.aarEdit:Hide()
+        ui.cardTitle:SetText("Squads")
+        ui.cardText:SetText(C.dim .. "Pick an event above to split its sign-ups into squads, each with a leader and an objective.|r")
+        ui.aarText:SetText(C.dim .. "After the operation, its leaders write what happened here.|r")
+        ui.aarEdit:Hide()
         return
     end
     local mine = WarRoom.MyOrders(ev)
