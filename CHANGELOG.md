@@ -6,6 +6,15 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
+## 0.4.1 — 2026-10-27
+
+1. **Automatic Most Wanted list.** When an enemy player kills a RUIN member, that member's RUIN tells the org who did it (from the game's death recap, or the enemy player near you who had you targeted). The *Wanted* tab lists the killers of RUIN members this week, most kills first, with their guild, victims and where; officers can post a bounty from a row. A Most Wanted player's nameplate showing up near you raises a warning.
+2. **Slayers.** Honorable kills by RUIN members count on the Slayers list, and killing someone on the Most Wanted list is announced.
+3. **War Room.** Plan any event as an operation: squads (up to 25 of up to 40) with a leader and an objective, *Auto squads* from the sign-ups (tanks and healers spread first), and an after-action report afterwards. Everyone signed up sees their squad, leader and objective, and the reminder names their squad.
+4. **Loot notes.** The event's leaders note who got what (main spec, off spec, bank, disenchant, points and a note); drops your group loots are caught from the loot lines so noting one is a click. Members say which drop they hope for (*I want this*), and everyone sees each player's loot this season.
+5. The world boss and buff **timers moved to RUIN Finder** (Finder → Timers); `/muster timer` passes on to it. Events stay pickable for a few hours after they start (loot and reports come afterwards), and an event with an after-action report is kept a week.
+6. New commands: `/muster wanted`, `/muster war`, `/muster loot`.
+
 ## 0.4.0 — 2026-10-23 · Beta 1
 
 The RUIN Gaming Companion App enters beta: every addon is now 0.4.0. Nothing changed since 0.3.10 apart from the version number. Report what you find under Settings → Feedback.

@@ -1,11 +1,11 @@
--- RUIN Muster: World sightings and timers (formerly the RUIN Intel addon)
+-- RUIN Muster: World sightings (formerly the RUIN Intel addon)
 -- See something, say something: one button reports what you see and where,
 -- and every RUIN member gets an alert, an entry in the Sightings feed and a
 -- pin on the world map and minimap that fades as the report ages. "Under
 -- attack" calls for help with your position. Enemy sightings near a rally
 -- point mark it contested (see Muster.lua). Boss, rare and enemy sightings
--- have a "Find group" button that starts a Finder listing. The Timers page
--- tracks world bosses and world buff drops.
+-- have a "Find group" button that starts a Finder listing. World boss and
+-- buff timers moved to RUIN Finder (Finder > Timers) in Muster 0.4.1.
 local ADDON, ns = ...
 local R = RUIN_API
 if not R or (R.apiLevel or 1) < 6 then return end
@@ -32,19 +32,6 @@ local KINDS = {
 local KIND = {}
 for _, k in ipairs(KINDS) do KIND[k.key] = k end
 World.KINDS, World.KIND = KINDS, KIND
-
--- Respawn windows are WoW Classic's; Forever may differ, so they are a guide only.
-local TIMERS = {
-    { key = "azuregos", label = "Azuregos",          kind = "boss", where = "Azshara",              window = { 3 * 86400, 7 * 86400 } },
-    { key = "kazzak",   label = "Lord Kazzak",       kind = "boss", where = "Blasted Lands",        window = { 3 * 86400, 7 * 86400 } },
-    { key = "nightmare",  label = "Dragons of Nightmare", kind = "boss", where = "Duskwood, Ashenvale, Feralas, Hinterlands", window = { 3 * 86400, 7 * 86400 } },
-    { key = "dragonslayer",     label = "Rallying Cry (Onyxia / Nefarian head)", kind = "buff", where = "Stormwind" },
-    { key = "zg",       label = "Spirit of Zandalar (Hakkar's heart)",   kind = "buff", where = "Yojamba Isle, Stranglethorn" },
-    { key = "songflower", label = "Songflower Serenade", kind = "buff", where = "Felwood",             window = { 25 * 60, 25 * 60 } },
-}
-local TIMER = {}
-for _, t in ipairs(TIMERS) do TIMER[t.key] = t end
-World.TIMERS = TIMERS
 
 local EXPIRE = 30 * 60
 local REPORT_COOLDOWN = 10
@@ -140,95 +127,6 @@ local function refreshPins()
 end
 
 ---------------------------------------------------------------------------
--- Timers: world bosses and world buffs
----------------------------------------------------------------------------
-function World.SetTimer(key, minutesFromNow)
-    local t = TIMER[key]
-    if not t then return end
-    local now = GetServerTime()
-    local rec = db.world.timers[key] or {}
-    if minutesFromNow and minutesFromNow > 0 then
-        rec.plan = now + math.floor(minutesFromNow * 60)
-    else
-        rec.last, rec.plan = now, nil
-    end
-    rec.by, rec.t = UnitName("player"), now
-    rec.warned = nil
-    db.world.timers[key] = rec
-    M:Send("TIMER", { k = key, l = rec.last, p = rec.plan, t = rec.t }, "ORG", nil, R.PRIORITY.ALERT)
-    M:Print(rec.plan and ("%s dropping in %d min, RUIN told."):format(t.label, minutesFromNow)
-        or ("%s marked %s now."):format(t.label, t.kind == "boss" and "killed" or "dropped"))
-    refresh()
-end
-
-function World.OnTimer(d, sender)
-    if type(d) ~= "table" then return end
-    local t = type(d.k) == "string" and TIMER[d.k]
-    if not t or not tonumber(d.t) then return end
-    local rec = db.world.timers[d.k] or {}
-    if (rec.t or 0) >= tonumber(d.t) then return end
-    local newPlan = tonumber(d.p)
-    local wasPlan = rec.plan
-    rec.last, rec.plan, rec.by, rec.t = tonumber(d.l) or rec.last, newPlan, sender, tonumber(d.t)
-    rec.warned = nil
-    db.world.timers[d.k] = rec
-    if db.world.alerts[t.kind] then
-        if newPlan and newPlan ~= wasPlan then
-            M:Toast(("%s%s|r drops in %s (%s)"):format(KIND.buff.color, t.label, W.Duration(newPlan - GetServerTime()),
-                W.ClassName(sender)), { sound = true })
-        elseif not newPlan then
-            M:Toast(("%s%s|r %s (%s)"):format(KIND[t.kind].color, t.label, t.kind == "boss" and "killed" or "dropped",
-                W.ClassName(sender)))
-        end
-    end
-    refresh()
-end
-
--- Share timers with someone who just connected (called from Muster's OnAsk).
-function World.Ask()
-    for key, rec in pairs(db.world.timers) do
-        if rec.t then
-            M:Send("TIMER", { k = key, l = rec.last, p = rec.plan, t = rec.t }, "ORG", nil, R.PRIORITY.BULK)
-        end
-    end
-end
-
-local function timerStatus(t, rec)
-    local now = GetServerTime()
-    if rec and rec.plan and rec.plan > now then
-        return C.good .. "drops in " .. W.Duration(rec.plan - now) .. "|r"
-    end
-    if not rec or not rec.last then return C.dim .. "no report yet|r" end
-    local ago = now - rec.last
-    local verb = t.kind == "boss" and "killed " or "dropped "
-    local s = C.white .. verb .. W.Ago(ago) .. "|r"
-    if t.window then
-        local lo, hi = t.window[1], t.window[2]
-        if ago < lo then
-            s = s .. C.dim .. "  ·  back in " .. W.Duration(lo - ago) .. (hi > lo and "+" or "") .. "|r"
-        elseif ago < hi then
-            s = s .. C.gold .. "  ·  may be up now|r"
-        else
-            s = s .. C.good .. "  ·  should be up|r"
-        end
-    end
-    return s
-end
-World.TimerStatus = timerStatus
-
-local function timerTick()
-    local now = GetServerTime()
-    for key, rec in pairs(db.world.timers) do
-        local t = TIMER[key]
-        if t and rec.plan and not rec.warned and rec.plan - now <= 60 and rec.plan > now then
-            rec.warned = true
-            if db.world.alerts.buff then M:Toast(("%s%s|r drops in under a minute!"):format(KIND.buff.color, t.label), { sound = true }) end
-        end
-        if rec.plan and rec.plan <= now then rec.last, rec.plan = rec.plan, nil end
-    end
-end
-
----------------------------------------------------------------------------
 -- Find group: the one part of a sighting that belongs to Finder
 ---------------------------------------------------------------------------
 function World.FindGroup(kindKey, text)
@@ -315,72 +213,15 @@ function World.BuildSightings(page)
     ui.list.frame:SetPoint("BOTTOMRIGHT", page, "BOTTOMRIGHT", -24, 0)
 end
 
-function World.BuildTimers(page)
-    local h = W.Header(page, "World bosses and world buffs")
-    h:SetPoint("TOPLEFT", 0, -2)
-    local sub = W.Label(page, C.dim .. "Press Now when a boss dies or a buff drops, or announce a buff drop ahead of time. Respawn windows are WoW Classic's, as a guide.|r", "GameFontHighlightSmall")
-    sub:SetPoint("TOPLEFT", 0, -24)
-    sub:SetPoint("RIGHT", page, "RIGHT", -6, 0)
-    ui.timers = W.List(page, 40, function(row)
-        row.icon = row:CreateTexture(nil, "ARTWORK")
-        row.icon:SetSize(28, 28)
-        row.icon:SetPoint("LEFT", 6, 0)
-        row.name = W.Label(row, "", "GameFontNormal")
-        row.name:SetPoint("TOPLEFT", row.icon, "TOPRIGHT", 8, 2)
-        row.name:SetPoint("RIGHT", row, "RIGHT", -260, 0)
-        row.name:SetWordWrap(false)
-        row.status = W.Label(row, "", "GameFontHighlightSmall")
-        row.status:SetPoint("TOPLEFT", row.name, "BOTTOMLEFT", 0, -3)
-        row.status:SetPoint("RIGHT", row, "RIGHT", -260, 0)
-        row.status:SetWordWrap(false)
-        row.now = W.Button(row, "Now", 50)
-        row.now:SetPoint("RIGHT", -4, 0)
-        row.go = W.Button(row, "Announce", 78)
-        row.go:SetPoint("RIGHT", row.now, "LEFT", -10, 0)
-        row.minsLabel = W.Label(row, C.dim .. "min|r", "GameFontHighlightSmall")
-        row.minsLabel:SetPoint("RIGHT", row.go, "LEFT", -6, 0)
-        row.mins = W.EditBox(row, 34)
-        row.mins:SetPoint("RIGHT", row.minsLabel, "LEFT", -4, 0)
-        if row.mins.SetNumeric then row.mins:SetNumeric(true) end
-        row.inLabel = W.Label(row, C.dim .. "Drops in|r", "GameFontHighlightSmall")
-        row.inLabel:SetPoint("RIGHT", row.mins, "LEFT", -5, 0)
-    end, function(row, t)
-        row.icon:SetTexture(KIND[t.kind].icon)
-        row.name:SetText(t.label .. "  " .. C.dim .. t.where .. "|r")
-        row.status:SetText(timerStatus(t, db.world.timers[t.key]))
-        local buff = t.kind == "buff"
-        row.go:SetShown(buff)
-        row.mins:SetShown(buff)
-        row.minsLabel:SetShown(buff)
-        row.inLabel:SetShown(buff)
-        row.now:SetScript("OnClick", function() World.SetTimer(t.key) end)
-        row.go:SetScript("OnClick", function()
-            local m = tonumber(row.mins:GetText())
-            if m and m > 0 then World.SetTimer(t.key, m); row.mins:SetText("") end
-        end)
-        local rec = db.world.timers[t.key]
-        row.tip = function(tip)
-            tip:AddLine(t.label, 1, 0.82, 0)
-            tip:AddLine(t.where, 1, 1, 1)
-            tip:AddLine(t.kind == "boss" and "Now: it was killed just now." or
-                "Now: it dropped just now.  Announce: it drops in the minutes you type.", 0.7, 0.75, 0.8, true)
-            if rec and rec.by then tip:AddLine("Last report by " .. short(rec.by), 0.7, 0.7, 0.7) end
-        end
-    end)
-    ui.timers.frame:SetPoint("TOPLEFT", 0, -52)
-    ui.timers.frame:SetPoint("BOTTOMRIGHT", page, "BOTTOMRIGHT", -24, 0)
-end
-
 function World.Active()
     local now, items = GetServerTime(), {}
     for _, e in ipairs(feed) do if now - e.t <= EXPIRE then items[#items + 1] = e end end
     return items
 end
 
--- Called by Muster's page refresh for the Sightings (which = "sightings") and Timers pages.
+-- Called by Muster's page refresh for the Sightings page.
 function World.Refresh(which)
-    if which == "sightings" and ui.list then ui.list:SetItems(World.Active())
-    elseif which == "timers" and ui.timers then ui.timers:SetItems(TIMERS) end
+    if which == "sightings" and ui.list then ui.list:SetItems(World.Active()) end
 end
 
 ---------------------------------------------------------------------------
@@ -416,14 +257,11 @@ function World.Init(module, mdb, refreshFn)
     for k in pairs(KIND) do if db.world.alerts[k] == nil then db.world.alerts[k] = true end end
 
     M:Listen("SPOT", function(_, d, sender) World.AddSpot(d, sender, false) end)
-    M:Listen("TIMER", function(_, d, sender) World.OnTimer(d, sender) end)
     -- Members still running the old RUIN Intel addon send under its name.
     if M.ListenRaw then
         M:ListenRaw("Intel:SPOT", function(_, d, sender) World.AddSpot(d, sender, false) end)
-        M:ListenRaw("Intel:TIMER", function(_, d, sender) World.OnTimer(d, sender) end)
     end
     C_Timer.NewTicker(30, function() refreshPins(); refresh() end)
-    C_Timer.NewTicker(5, timerTick)
 end
 
 function RUIN_Muster_ReportEnemy() World.Report("enemy", "") end
@@ -432,19 +270,13 @@ BINDING_NAME_RUIN_MUSTER_ENEMY = "Muster: report enemy group here"
 BINDING_NAME_RUIN_MUSTER_ATTACK = "Muster: I'm under attack"
 
 -- /muster spot enemy|attack|boss|rare|buff|other [detail]   (also /intel ...)
--- /muster timer <name> [minutes]     e.g. /muster timer songflower, /muster timer dragonslayer 5
+-- Timers (world bosses and buffs) moved to RUIN Finder in 0.4.1.
 function World.Slash(msg)
     local cmd, rest = (msg or ""):match("^(%S*)%s*(.*)$")
     cmd = cmd:lower()
-    if cmd == "timer" then
-        local key, mins = rest:lower():match("^(%S+)%s*(%d*)")
-        if key and TIMER[key] then
-            World.SetTimer(key, tonumber(mins))
-        else
-            local keys = {}
-            for _, t in ipairs(TIMERS) do keys[#keys + 1] = t.key end
-            M:Print("Timers: " .. table.concat(keys, ", "))
-        end
+    if cmd == "timer" or cmd == "timers" then
+        if SlashCmdList.RUINFINDER then SlashCmdList.RUINFINDER("timer " .. rest)
+        else M:Print("Timers moved to RUIN Finder (Finder > Timers).") end
     elseif KIND[cmd] then
         World.Report(cmd, rest)
     elseif cmd ~= "" then

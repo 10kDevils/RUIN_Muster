@@ -10,7 +10,9 @@
 -- Forever doesn't: rally points (an event's meeting place, pinned on the map
 -- and marked contested when RUIN Intel sees enemies nearby) and bounties on
 -- rival guilds or players, confirmed by a RUIN witness. The faction-wide
--- campaign, keeps, captures and Most Wanted are left to Overlord.
+-- campaign, keeps and captures are left to Overlord. Since 0.4.1 Muster
+-- keeps its own automatic Most Wanted list (Wanted.lua), plans operations
+-- in the War Room (WarRoom.lua) and keeps loot notes (Loot.lua).
 local ADDON, ns = ...
 local R = RUIN_API
 if not R or (R.apiLevel or 1) < 8 then
@@ -20,7 +22,7 @@ end
 local W = R.Widgets
 local C = W.COLORS
 
-local M = R:RegisterModule("Muster", { version = "0.4.0" })
+local M = R:RegisterModule("Muster", { version = "0.4.1" })
 
 local KINDS = { "Raid", "Dungeon", "PvP", "Leveling", "Social" }
 local SIZES = { "Open", "5", "10", "20", "40" }
@@ -221,6 +223,7 @@ end
 function M:OnEvent(ev, sender)
     if not validEvent(ev) then return end
     ev.rally = cleanRally(ev.rally)
+    if ns.WarRoom then ns.WarRoom.Clean(ev) end
     local cur = db.events[ev.id]
     if cur and (cur.t or 0) >= (ev.t or 0) then
         -- keep our version, but merge any sign-ups we have not seen
@@ -266,12 +269,14 @@ end
 
 -- Someone just connected: share the upcoming events we know.
 function M:OnAsk()
+    if ns.Wanted then ns.Wanted.Share() end
+    if ns.Loot then ns.Loot.Share() end
     C_Timer.After(2 + math.random() * 8, function()
         local now = GetServerTime()
         for _, ev in pairs(db.events) do
             if ev.at + KEEP_AFTER > now and not ev.practice then self:Send("EVENT", ev, "ORG", nil, R.PRIORITY.BULK) end
         end
-        if ns.World then ns.World.Ask() end
+
         if R:IsOfficer() then
             for _, b in ipairs(M.ActiveBounties()) do
                 if not b.practice then self:Send("BOUNTY", b, "ORG", nil, R.PRIORITY.BULK) end
@@ -658,12 +663,13 @@ local function tick()
     rollWeekly(now)
     updatePins()
     for id, ev in pairs(db.events) do
-        if ev.at + KEEP_AFTER < now and not ev.weekly then
+        if ev.at + (ev.aar and 7 * 86400 or KEEP_AFTER) < now and not ev.weekly then
             db.events[id] = nil
             db.reminded[id] = nil
         elseif me and ev.signups[me] and not db.reminded[id] and ev.at - now <= REMIND_BEFORE and ev.at > now then
             db.reminded[id] = true
-            M:Toast(("%s starts in %d minutes%s."):format(ev.title, math.ceil((ev.at - now) / 60), myGroupText(ev)), { sound = true })
+            M:Toast(("%s starts in %d minutes%s.%s"):format(ev.title, math.ceil((ev.at - now) / 60), myGroupText(ev),
+                ns.WarRoom and ns.WarRoom.ReminderText(ev) or ""), { sound = true })
         end
     end
 end
@@ -897,9 +903,20 @@ local function layoutEvents()
     ui.list.frame:SetPoint("BOTTOMRIGHT", ui.eventsPage, "BOTTOMRIGHT", -24, 22)
 end
 
--- Pick which event the Roster and Reserves pages show.
+-- Events the Roster, Reserves, War Room and Loot pages can show: upcoming,
+-- and those that started in the last hours (loot notes and reports come after).
+local function pickable()
+    local items, now = {}, GetServerTime()
+    for _, ev in pairs(db.events) do
+        if ev.at + KEEP_AFTER > now or (ev.aar and ev.at + 7 * 86400 > now) then items[#items + 1] = ev end
+    end
+    table.sort(items, function(a, b) return a.at < b.at end)
+    return items
+end
+
+-- Pick which event the Roster, Reserves, War Room and Loot pages show.
 local function pickedEvent()
-    local items = upcoming()
+    local items = pickable()
     if #items == 0 then return nil, items end
     for _, ev in ipairs(items) do if ev.id == ui.picked then return ev, items end end
     ui.picked = items[1].id
@@ -1164,50 +1181,77 @@ local function layoutBounties()
     ui.claimList.frame:SetPoint("TOPLEFT", ui.claimHeader, "BOTTOMLEFT", 0, -10)
     ui.claimList.frame:SetPoint("BOTTOMRIGHT", ui.bountyPage, "BOTTOMRIGHT", -24, 30)
     local hasOv = R:HasOverlord()
-    ui.ovLine:SetText(C.dim .. (hasOv and "Faction-wide campaign, keeps, captures and Most Wanted: Overlord Forever."
+    ui.ovLine:SetText(C.dim .. (hasOv and "Faction-wide campaign, keeps and captures: Overlord Forever. RUIN's own Most Wanted is on its tab."
         or "For the faction-wide world PvP campaign, RUIN works alongside Overlord Forever (not installed).") .. "|r")
     ui.ovBtn:SetShown(hasOv)
 end
 
+-- For the War Room, Loot and Most Wanted tabs (WarRoom.lua, Loot.lua, Wanted.lua).
+local internals = {
+    db = function() return db end,
+    canManage = function(ev) return canManage(ev) end,
+    changed = function() changed() end,
+    eventPicker = function(page, onChange) return eventPicker(page, onChange) end,
+    pickedEvent = function() return pickedEvent() end,
+    sortedSignups = function(ev) return sortedSignups(ev) end,
+}
+ns.MusterInternals = internals
+
+local TABS = { "Events", "Roster", "Reserves", "War Room", "Loot", "Bounties", "Wanted", "Sightings" }
+local function tabIndex(name) for i, n in ipairs(TABS) do if n == name then return i end end end
+
 local function buildPage(panel)
     ui.panel = panel
-    ui.tabs = W.SubTabs(panel, { "Events", "Roster", "Reserves", "Bounties", "Sightings", "Timers" }, function() refreshPage() end)
+    ui.tabs = W.SubTabs(panel, TABS, function() refreshPage() end)
     ui.eventsPage = ui.tabs.pages[1]
     buildEvents(ui.tabs.pages[1])
     buildRoster(ui.tabs.pages[2])
     buildReserves(ui.tabs.pages[3])
-    buildBounties(ui.tabs.pages[4])
-    ns.World.BuildSightings(ui.tabs.pages[5])
-    ns.World.BuildTimers(ui.tabs.pages[6])
+    ns.WarRoom.Build(ui.tabs.pages[4])
+    ns.Loot.Build(ui.tabs.pages[5])
+    buildBounties(ui.tabs.pages[6])
+    ns.Wanted.Build(ui.tabs.pages[7])
+    ns.World.BuildSightings(ui.tabs.pages[8])
 
     refreshPage = function()
         if not ui.panel:IsVisible() then return end
         local items = upcoming()
         ui.tabs:SetLabel(1, #items > 0 and ("Events (" .. #items .. ")") or "Events")
-        local tab = ui.tabs.selected
-        if tab == 1 then
+        local name = TABS[ui.tabs.selected]
+        if name == "Events" then
             layoutEvents()
             ui.list:SetItems(items)
-        elseif tab == 2 then
+        elseif name == "Roster" then
             refreshRoster()
-        elseif tab == 3 then
+        elseif name == "Reserves" then
             refreshReserves()
-        elseif tab == 4 then
+        elseif name == "War Room" then
+            ns.WarRoom.Refresh()
+        elseif name == "Loot" then
+            ns.Loot.Refresh()
+        elseif name == "Bounties" then
             layoutBounties()
             ui.bountyList:SetItems(activeBounties())
             ui.claimList:SetItems(openClaims())
-        elseif tab == 5 then
+        elseif name == "Wanted" then
+            ns.Wanted.Refresh()
+        elseif name == "Sightings" then
             ns.World.Refresh("sightings")
-        elseif tab == 6 then
-            ns.World.Refresh("timers")
         end
         local nSight = #ns.World.Active()
-        ui.tabs:SetLabel(5, nSight > 0 and ("Sightings (" .. nSight .. ")") or "Sightings")
+        ui.tabs:SetLabel(tabIndex("Sightings"), nSight > 0 and ("Sightings (" .. nSight .. ")") or "Sightings")
         local nb = #activeBounties()
-        ui.tabs:SetLabel(4, nb > 0 and ("Bounties (" .. nb .. ")") or "Bounties")
+        ui.tabs:SetLabel(tabIndex("Bounties"), nb > 0 and ("Bounties (" .. nb .. ")") or "Bounties")
+        local nw = ns.Wanted.Count()
+        ui.tabs:SetLabel(tabIndex("Wanted"), nw > 0 and ("Wanted (" .. nw .. ")") or "Wanted")
     end
     panel:SetScript("OnShow", function() refreshPage() end)
     ui.tabs:Select(1)
+end
+
+function M:SelectSubTab(name)
+    local i = tabIndex(name)
+    if ui.tabs and i then ui.tabs:Select(i) end
 end
 
 ---------------------------------------------------------------------------
@@ -1229,6 +1273,9 @@ function M:OnEnable()
     self:Listen("CONFIRM", "OnConfirm")
     self:AddTab("Muster", buildPage)
     ns.World.Init(self, db, function() refreshPage() end)
+    ns.Wanted.Init(self, db)
+    ns.WarRoom.Init(self, internals)
+    ns.Loot.Init(self, internals, db)
 
     R:Subscribe("CHANNELS_CHANGED", function()
         C_Timer.After(6, function() if R:IsConnected() then self:Send("ASK", {}, "ORG") end end)
@@ -1242,7 +1289,7 @@ BINDING_HEADER_RUIN_MUSTER = "RUIN Muster"
 BINDING_NAME_RUIN_MUSTER_OPEN = "Open Muster"
 BINDING_NAME_RUIN_MUSTER_CLAIM = "Muster: claim bounty kill on target"
 
--- /muster [spot <kind> [detail] | timer <name> [min] | practice | rally <name> | bounty guild|player <name> (reward) | claim | confirm | pins]
+-- /muster [spot <kind> [detail] | wanted | war | loot | practice | rally <name> | bounty guild|player <name> (reward) | claim | confirm | pins]
 SLASH_RUINMUSTER1 = "/muster"
 SlashCmdList.RUINMUSTER = function(input)
     input = input or ""
@@ -1262,8 +1309,17 @@ SlashCmdList.RUINMUSTER = function(input)
         M:ClaimKill()
     elseif cmd == "confirm" then
         M:Confirm()
-    elseif cmd == "spot" or cmd == "timer" then
-        ns.World.Slash(cmd == "timer" and ("timer " .. rest) or rest)
+    elseif cmd == "spot" then
+        ns.World.Slash(rest)
+    elseif cmd == "timer" or cmd == "timers" then
+        if SlashCmdList.RUINFINDER then
+            SlashCmdList.RUINFINDER("timer " .. rest)
+        else
+            M:Print("World boss and buff timers moved to RUIN Finder (Finder > Timers). Install RUIN Finder 0.4.1 or later.")
+        end
+    elseif cmd == "wanted" or cmd == "war" or cmd == "warroom" or cmd == "loot" then
+        M:OpenTab()
+        M:SelectSubTab(cmd == "wanted" and "Wanted" or cmd == "loot" and "Loot" or "War Room")
     elseif cmd == "pins" then
         db.pins = not db.pins
         updatePins()
