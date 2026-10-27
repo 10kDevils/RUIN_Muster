@@ -4,6 +4,12 @@ Versioning: the third number counts the meaningful changes made since the second
 
 ## Unreleased
 
+(nothing yet)
+
+## 0.4.2 — 2026-10-27
+
+2 changes since 0.4.1:
+
 1. **Five tabs instead of eight:** *Events* (post and sign up), *Plan* (the picked event's *Groups* and *Squads*: the raid roster of groups of five, and the War Room's squads with the after-action report), *Loot* (*Reserves* and *Drops*), *Wanted* (*Most Wanted* and *Bounties*) and *Sightings*. Nothing was removed; `/muster war`, `/muster loot` and `/muster wanted` open the right page.
 2. Plan → Squads with no upcoming event says what the page is for instead of showing empty cards.
 

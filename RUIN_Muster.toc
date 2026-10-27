@@ -2,7 +2,7 @@
 ## Title: |cffe6b862RUIN|r Muster
 ## Notes: Org-wide events with role sign-ups and reminders, rally points, the War Room, loot notes, bounties, the Most Wanted list and world sightings, across every RUIN guild.
 ## Author: RUIN
-## Version: 0.4.1
+## Version: 0.4.2
 ## Dependencies: RUIN_Core
 ## SavedVariables: RUIN_MusterDB
 ## IconTexture: Interface\Icons\INV_Misc_Note_02
