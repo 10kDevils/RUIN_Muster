@@ -96,8 +96,8 @@ function World.AddSpot(d, sender, mine)
     if type(d) ~= "table" then return end
     local k = KIND[d.k]
     if not k or type(d.w) ~= "string" then return end
-    local e = { kind = d.k, text = type(d.x) == "string" and d.x or "", where = d.w, by = sender,
-                t = tonumber(d.t) or GetServerTime() }
+    local e = { kind = d.k, text = type(d.x) == "string" and d.x:sub(1, 80) or "", where = d.w:sub(1, 80), by = sender,
+                t = (R.SaneTime and R:SaneTime(d.t)) or GetServerTime() }
     if type(d.m) == "number" and tonumber(d.px) and tonumber(d.py) then
         e.map, e.x, e.y = d.m, tonumber(d.px) / 10000, tonumber(d.py) / 10000
     end

@@ -84,6 +84,19 @@ local function validEvent(e)
     return type(e) == "table" and type(e.id) == "string" and type(e.title) == "string" and type(e.at) == "number"
 end
 
+-- Who sent a message is the one thing the game vouches for. A sender may
+-- change an event when they wrote it, or when they're a moderator (the org
+-- admin or a verified officer); a name inside the message proves nothing.
+local MAX_AHEAD = 90 * 86400           -- events further out than this are refused
+local function sameName(a, b) return R.SameName and R:SameName(a, b) or (R.Util.ShortName(a or "") == R.Util.ShortName(b or "")) end
+local function moderator(name)
+    if R.IsModeratorName then return R:IsModeratorName(name) end
+    return R.IsOfficerName and R:IsOfficerName(name) or false
+end
+local function sane(t) if R.SaneTime then return R:SaneTime(t) end return tonumber(t) end
+local function mayChange(ev, sender) return ev ~= nil and (sameName(sender, ev.by) or moderator(sender)) end
+M.MayChange = mayChange
+
 local function whenText(at) return W.WhenText(at) end
 
 local refreshPage = function() end
@@ -222,9 +235,32 @@ end
 
 function M:OnEvent(ev, sender)
     if not validEvent(ev) then return end
-    ev.rally = cleanRally(ev.rally)
-    if ns.WarRoom then ns.WarRoom.Clean(ev) end
     local cur = db.events[ev.id]
+    -- the author or a moderator; nobody takes over someone else's event
+    if cur and not cur.practice then
+        if not mayChange(cur, sender) then return end
+        ev.by, ev.gu = cur.by, cur.gu
+    elseif not mayChange(ev, sender) then
+        return
+    end
+    if type(ev.by) ~= "string" then return end
+    ev.practice = nil
+    ev.id, ev.title = ev.id:sub(1, 48), ev.title:sub(1, 40)
+    ev.t = sane(ev.t)
+    if not ev.t then return end
+    if ev.at > GetServerTime() + MAX_AHEAD or ev.at < 0 then return end
+    if ev.rosterT ~= nil then ev.rosterT = sane(ev.rosterT) end
+    if type(ev.signups) ~= "table" then ev.signups = {} end
+    if type(ev.roster) ~= "table" then ev.roster = nil end
+    ev.rally = cleanRally(ev.rally)
+    -- a pin on everyone's map: only from a moderator, or a guildmate whose
+    -- rank your guild lets create events (nobody else can lure the org)
+    if ev.rally and not moderator(sender) then
+        local rank = R.GuildRankOf and R:GuildRankOf(sender)
+        local allowed = rank ~= nil and R.GetEventRank and rank <= R:GetEventRank()
+        if not allowed then ev.rally = nil end
+    end
+    if ns.WarRoom then ns.WarRoom.Clean(ev) end
     if cur and (cur.t or 0) >= (ev.t or 0) then
         -- keep our version, but merge any sign-ups we have not seen
         for g, s in pairs(ev.signups or {}) do
@@ -251,17 +287,24 @@ function M:OnEvent(ev, sender)
     changed()
 end
 
-function M:OnSign(d)
+function M:OnSign(d, sender)
     local ev = type(d.id) == "string" and db.events[d.id]
     if not ev or type(d.g) ~= "string" or type(d.s) ~= "table" then return end
+    -- your own sign-up only: the name is the sender's, the GUID theirs
+    if not sameName(d.s.n, sender) then return end
+    if R.GUIDMatches and not R:GUIDMatches(sender, d.g) then return end
     local cur = ev.signups[d.g]
+    if cur and not sameName(cur.n, sender) then return end
+    d.s.t = sane(d.s.t)
+    if not d.s.t then return end
+    if d.s.role ~= nil and d.s.role ~= "T" and d.s.role ~= "H" and d.s.role ~= "D" then return end
     if cur and (cur.t or 0) > (d.s.t or 0) then return end
     ev.signups[d.g] = d.s.role and d.s or nil
     changed()
 end
 
-function M:OnDelete(d)
-    if type(d.id) == "string" and db.events[d.id] then
+function M:OnDelete(d, sender)
+    if type(d.id) == "string" and db.events[d.id] and mayChange(db.events[d.id], sender) then
         db.events[d.id] = nil
         changed()
     end
@@ -273,8 +316,13 @@ function M:OnAsk()
     if ns.Loot then ns.Loot.Share() end
     C_Timer.After(2 + math.random() * 8, function()
         local now = GetServerTime()
+        local me = R:GetPlayer().name
+        local officer = R:IsOfficer()
         for _, ev in pairs(db.events) do
-            if ev.at + KEEP_AFTER > now and not ev.practice then self:Send("EVENT", ev, "ORG", nil, R.PRIORITY.BULK) end
+            -- only copies others will accept: your own events, or every event when you're an officer
+            if ev.at + KEEP_AFTER > now and not ev.practice and (officer or sameName(ev.by, me)) then
+                self:Send("EVENT", ev, "ORG", nil, R.PRIORITY.BULK)
+            end
         end
 
         if R:IsOfficer() then
@@ -360,10 +408,12 @@ function M:PublishRoster(id)
     changed()
 end
 
-function M:OnRoster(d)
+function M:OnRoster(d, sender)
     local ev = type(d.id) == "string" and db.events[d.id]
-    if not ev or type(d.r) ~= "table" or (tonumber(d.t) or 0) <= (ev.rosterT or 0) then return end
-    ev.roster, ev.rosterT = d.r, tonumber(d.t)
+    if not ev or type(d.r) ~= "table" or not mayChange(ev, sender) then return end
+    local t = sane(d.t)
+    if not t or t <= (ev.rosterT or 0) then return end
+    ev.roster, ev.rosterT = d.r, t
     local me = R:GetPlayerGUID()
     local g = me and d.r[me]
     if g then
@@ -491,6 +541,10 @@ end
 
 function M:OnBounty(b, sender)
     if type(b) ~= "table" or type(b.id) ~= "string" or type(b.target) ~= "string" or type(b.exp) ~= "number" then return end
+    if not moderator(sender) then return end                       -- bounties are officers' (checked by sender)
+    if b.exp > GetServerTime() + BOUNTY_DAYS * 86400 + 3600 then return end
+    b.t = sane(b.t) or GetServerTime()
+    b.by, b.practice = sender, nil
     b.target = b.target:sub(1, 40)
     b.reward = type(b.reward) == "string" and b.reward:sub(1, 40) or ""
     b.kind = b.kind == "Player" and "Player" or "Guild"
@@ -503,8 +557,8 @@ function M:OnBounty(b, sender)
     refreshPage()
 end
 
-function M:OnBountyDelete(d)
-    if type(d.id) == "string" and db.bounties[d.id] then db.bounties[d.id] = nil; refreshPage() end
+function M:OnBountyDelete(d, sender)
+    if type(d.id) == "string" and db.bounties[d.id] and moderator(sender) then db.bounties[d.id] = nil; refreshPage() end
 end
 
 local function secret(v) return issecretvalue and issecretvalue(v) end
@@ -551,7 +605,8 @@ end
 function M:OnClaim(c, sender)
     if type(c) ~= "table" or type(c.id) ~= "string" or type(c.b) ~= "string" or type(c.v) ~= "string" then return end
     if db.claims[c.id] then return end
-    c.by, c.confirmed = sender, nil
+    c.by, c.confirmed, c.practice = sender, nil, nil
+    c.t = sane(c.t) or GetServerTime()
     db.claims[c.id] = c
     local near = type(c.map) == "number" and select(3, R.Map:Offset(c.map, c.x, c.y))
     if near and near <= WITNESS_YARDS then

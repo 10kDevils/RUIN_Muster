@@ -6,6 +6,12 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
+## 0.4.3 — 2026-10-28
+
+Security update (works best with RUIN Core 0.4.5). Every Muster message is now checked against who sent it. 1 change since 0.4.2:
+
+1. Only an event's author or a moderator (the org admin or a verified officer) can change, delete or roster an event; nobody can post an event in someone else's name. Sign-ups are your own only (your name and GUID). Bounties and their removal come from moderators, loot notes and their points from the event's leader or a moderator, and kills are credited to whoever sent them. A rally pin on everyone's map needs a moderator or a guildmate whose rank may create events. Events more than 90 days out and times in the future are refused, and members pass on only the events others will accept from them.
+
 ## 0.4.2 — 2026-10-27
 
 2 changes since 0.4.1:

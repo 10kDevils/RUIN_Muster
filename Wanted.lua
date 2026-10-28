@@ -107,6 +107,7 @@ function Wanted.AddDeath(d, sender)
     if type(d) ~= "table" or type(d.k) ~= "string" then return end
     local w = store()
     local t = tonumber(d.t) or now()
+    if R.SaneTime and not R:SaneTime(t) then return end              -- never in the future
     local victim = type(d.v) == "string" and d.v or sender
     if seen(w.deaths, d.k, victim, t) then return end
     local e = { k = d.k:sub(1, 48), kg = type(d.kg) == "string" and d.kg:sub(1, 48) or nil, v = victim:sub(1, 48),
@@ -139,6 +140,7 @@ function Wanted.AddKill(d, sender)
     if type(d) ~= "table" or type(d.v) ~= "string" then return end
     local w = store()
     local t = tonumber(d.t) or now()
+    if R.SaneTime and not R:SaneTime(t) then return end
     local slayer = type(d.k) == "string" and d.k or sender
     if seen(w.kills, slayer, d.v, t) then return end
     local e = { k = slayer:sub(1, 48), v = d.v:sub(1, 48), vg = type(d.vg) == "string" and d.vg:sub(1, 48) or nil,
@@ -342,7 +344,8 @@ function Wanted.Init(module, mdb)
     M, db = module, mdb
     store()
     M:Listen("WANTED", function(_, d, sender) lastHeard = GetTime(); Wanted.AddDeath(d, sender) end)
-    M:Listen("SLAY", function(_, d, sender) Wanted.AddKill(d, sender) end)
+    -- a kill is the sender's own: nobody claims kills for someone else
+    M:Listen("SLAY", function(_, d, sender) if type(d) == "table" then d.k = sender end; Wanted.AddKill(d, sender) end)
     M:RegisterEvent("PLAYER_DEAD", onDeath)
     M:RegisterEvent("CHAT_MSG_COMBAT_HONOR_GAIN", onHonor)
     M:RegisterEvent("NAME_PLATE_UNIT_ADDED", onPlate)

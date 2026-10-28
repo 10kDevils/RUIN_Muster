@@ -69,9 +69,19 @@ function Loot.Remove(id)
     return true
 end
 
+-- Loot notes (and their points) come from the event's leader or a moderator,
+-- checked by who sent them, never by a name in the note.
+local function mayNote(n, sender)
+    if R.IsModeratorName and R:IsModeratorName(sender) then return true end
+    local ev = n.ev and MC.db().events[n.ev]
+    return ev ~= nil and R.SameName ~= nil and R:SameName(sender, ev.by)
+end
+
 local function onNote(_, d, sender)
     local n = clean(d)
     if not n then return end
+    if R.SaneTime and not R:SaneTime(n.t) then return end
+    if not mayNote(n, sender) then return end
     local cur = store().notes[n.id]
     if cur and (cur.t or 0) >= n.t then return end
     n.by = sender
@@ -298,8 +308,12 @@ function Loot.Share()
         sharePending = false
         if lastHeard >= asked then return end
         local n = 0
+        local me, officer = R:GetPlayer().name, R:IsOfficer()
         for _, note in pairs(store().notes) do
-            if now() - note.t <= 14 * 86400 and n < 80 then n = n + 1; M:Send("LNOTE", note, "ORG", nil, R.PRIORITY.BULK) end
+            -- only notes others will accept from you
+            local ev = note.ev and MC.db().events[note.ev]
+            local mine = ev and R.SameName and R:SameName(ev.by, me)
+            if (officer or mine) and now() - note.t <= 14 * 86400 and n < 80 then n = n + 1; M:Send("LNOTE", note, "ORG", nil, R.PRIORITY.BULK) end
         end
     end)
 end
