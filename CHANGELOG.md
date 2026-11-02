@@ -6,6 +6,12 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
+## 0.4.4 — 2026-11-01
+
+1 change since 0.4.3:
+
+1. **No "blocked from an action" popup on Retail.** Wanted listened to the combat log for killing blows, and Retail (12.0+) keeps the combat log for Blizzard's own UI, so registering it raised the popup at login. On Retail, Wanted now leaves the combat log alone and counts kills from honor messages and deaths from your own deaths, as before. WoW Forever still uses the combat log.
+
 ## 0.4.3 — 2026-10-28
 
 Security update (works best with RUIN Core 0.4.5). Every Muster message is now checked against who sent it. 1 change since 0.4.2:
