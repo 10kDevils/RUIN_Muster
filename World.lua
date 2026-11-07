@@ -186,6 +186,7 @@ function World.BuildSightings(page)
         row.icon:SetPoint("LEFT", 4, 0)
         row.find = W.Button(row, "Find group", 80)
         row.find:SetPoint("RIGHT", -2, 0)
+        if W.LinkTo then W.LinkTo(row.find, "Finder") end
         row.text = W.Label(row, "")
         row.text:SetPoint("LEFT", row.icon, "RIGHT", 6, 0)
         row.text:SetPoint("RIGHT", row.find, "LEFT", -4, 0)

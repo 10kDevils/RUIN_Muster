@@ -6,6 +6,10 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
+## 0.5.1 — 2026-11-07
+
+- World sightings: *Find group* opens RUIN Finder, so it wears Finder's color (needs RUIN Core 0.5.3; plain before).
+
 ## 0.5.0 — 2026-11-02
 
 RUIN 0.5.0: every addon in the suite moves to 0.5.0 together. Includes Wanted on Retail without the combat log (0.4.4).
