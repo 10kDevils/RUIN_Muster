@@ -805,14 +805,14 @@ local function buildEvents(page)
     ui.practiceCheck.label:SetFontObject(GameFontHighlightSmall)
     ui.practiceCheck:SetPoint("RIGHT", ui.newBtn, "LEFT", -96, 0)
     ui.practiceCheck:SetScript("OnEnter", function(self)
-        W.SetBorder(self.box, "glow")
+        W.SetBorder(self.box, W.GOLD_EDGE and W.PALETTE.gold or "glow")
         if not GameTooltip then return end
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
         GameTooltip:AddLine("Practice mode", 1, 1, 1)
         GameTooltip:AddLine("Try posting events, rallies and bounties. Practice items stay on your screen only.", 0.8, 0.8, 0.8, true)
         GameTooltip:Show()
     end)
-    ui.practiceCheck:SetScript("OnLeave", function(self) W.SetBorder(self.box, "border"); if GameTooltip then GameTooltip:Hide() end end)
+    ui.practiceCheck:SetScript("OnLeave", function(self) W.SetBorder(self.box, W.GOLD_EDGE or "border"); if GameTooltip then GameTooltip:Hide() end end)
 
     -- The form, shown under the top line while New event is open:
     --   title, type, size / day, time, weekly, rally / description, needs, Post

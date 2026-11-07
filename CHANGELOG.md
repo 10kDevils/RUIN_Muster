@@ -8,6 +8,7 @@ Versioning: the third number counts the meaningful changes made since the second
 
 ## 0.5.1 — 2026-11-07
 
+- Practice mode's check box lights gold on hover, like the rest (needs RUIN Core 0.5.3).
 - World sightings: *Find group* opens RUIN Finder, so it wears Finder's color (needs RUIN Core 0.5.3; plain before).
 
 ## 0.5.0 — 2026-11-02
