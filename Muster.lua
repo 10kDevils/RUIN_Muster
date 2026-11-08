@@ -981,15 +981,17 @@ end
 local function eventPicker(page, onChange)
     local b = W.MarkChoice(W.Button(page, "", 300, nil))
     b.tipTitle = "Which event"
-    b:SetScript("OnClick", function(_, mouse)
-        local _, items = pickedEvent()
-        if #items == 0 then return end
-        local idx = 1
-        for i, ev in ipairs(items) do if ev.id == ui.picked then idx = i end end
-        idx = (mouse == "RightButton") and ((idx - 2) % #items + 1) or (idx % #items + 1)
-        ui.picked = items[idx].id
-        onChange()
-    end)
+    local byId = {}
+    W.AttachMenu(b, { width = 300,
+        items = function()
+            local _, items = pickedEvent()
+            local ids = {}
+            byId = {}
+            for _, ev in ipairs(items or {}) do ids[#ids + 1] = ev.id; byId[ev.id] = ev end
+            return ids
+        end,
+        label = function(id) local ev = byId[id]; return ev and (ev.title .. "  ·  " .. date("%a %H:%M", ev.at)) or tostring(id) end,
+        current = function() return ui.picked end, pick = function(id) ui.picked = id; onChange() end })
     b.Refresh = function()
         local ev = pickedEvent()
         b:SetText(ev and (ev.title .. "  ·  " .. date("%a %H:%M", ev.at)) or "No upcoming events")
