@@ -349,10 +349,9 @@ function Wanted.Init(module, mdb)
     M:RegisterEvent("PLAYER_DEAD", onDeath)
     M:RegisterEvent("CHAT_MSG_COMBAT_HONOR_GAIN", onHonor)
     M:RegisterEvent("NAME_PLATE_UNIT_ADDED", onPlate)
-    -- Retail (12.0+) keeps the combat log for Blizzard's UI: registering it
-    -- there raises the "blocked from an action" popup. Kills and deaths still
-    -- come from honor messages and your own death on Retail.
-    if R.client ~= "retail" then
-        pcall(M.RegisterEvent, M, "COMBAT_LOG_EVENT_UNFILTERED", onCombatLog)
-    end
+    -- Retail 12 and WoW Forever keep the combat log for Blizzard's UI:
+    -- registering it there raises the "blocked from an action" popup, so RUIN
+    -- Core skips it on those clients. Kills and deaths still come from honor
+    -- messages and your own death.
+    pcall(M.RegisterEvent, M, "COMBAT_LOG_EVENT_UNFILTERED", onCombatLog)
 end

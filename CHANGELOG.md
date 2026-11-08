@@ -8,6 +8,7 @@ Versioning: the third number counts the meaningful changes made since the second
 
 ## 0.5.1 — 2026-11-07
 
+- Wanted notices no longer cause RUIN Core's "blocked from an action" popup in WoW Forever: Core decides when the combat log can be used.
 - The event picker (Roster, Raid tools) opens a list of upcoming events instead of stepping through them; Type and Size open lists too (needs RUIN Core 0.5.3).
 - Practice mode's check box lights gold on hover, like the rest (needs RUIN Core 0.5.3).
 - World sightings: *Find group* opens RUIN Finder, so it wears Finder's color (needs RUIN Core 0.5.3; plain before).
