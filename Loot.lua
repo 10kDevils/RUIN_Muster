@@ -6,6 +6,18 @@
 -- this"), which the leaders see while awarding. Everyone sees the notes and
 -- each player's loot this season (count and points).
 local ADDON, ns = ...
+
+-- WoW Forever runs on the Retail 12 client, where the old global item
+-- functions may be gone; these ask C_Item when they are. (Inside each
+-- function the name still means the global, so tests and older clients work.)
+local GetItemInfo = function(...)
+    local f = GetItemInfo or (C_Item and C_Item.GetItemInfo)
+    if f then return f(...) end
+end
+local GetItemInfoInstant = function(...)
+    local f = GetItemInfoInstant or (C_Item and C_Item.GetItemInfoInstant)
+    if f then return f(...) end
+end
 local R = RUIN_API
 if not R or (R.apiLevel or 1) < 8 then return end
 local W = R.Widgets
