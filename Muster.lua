@@ -22,7 +22,7 @@ end
 local W = R.Widgets
 local C = W.COLORS
 
-local M = R:RegisterModule("Muster", { version = "0.5.1" })
+local M = R:RegisterModule("Muster", { version = "0.5.2" })
 
 local KINDS = { "Raid", "Dungeon", "PvP", "Leveling", "Social" }
 local SIZES = { "Open", "5", "10", "20", "40" }
@@ -674,11 +674,7 @@ updatePins = function()
 end
 
 local function yardsBetween(map, x1, y1, x2, y2)
-    if not (C_Map and C_Map.GetMapWorldSize) then return nil end
-    local w, h = C_Map.GetMapWorldSize(map)
-    if not w or w <= 0 then return nil end
-    local dx, dy = (x2 - x1) * w, (y2 - y1) * h
-    return math.sqrt(dx * dx + dy * dy)
+    return R.Map.Yards and R.Map:Yards(map, x1, y1, x2, y2)
 end
 
 local function onSighting(sp)

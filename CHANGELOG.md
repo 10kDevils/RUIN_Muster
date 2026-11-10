@@ -6,6 +6,10 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
+## 0.5.2 — 2026-11-09
+
+- Distances to a rally point work on WoW Forever's client (needs RUIN Core 0.5.5).
+
 ## 0.5.1 — 2026-11-07
 
 - Item names and details come from C_Item when the old global item functions aren't there (the Retail 12 client WoW Forever runs on), so items stop showing as "Loading item...".
