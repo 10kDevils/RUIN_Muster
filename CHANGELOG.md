@@ -6,9 +6,9 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
-## 0.5.2 — 2026-11-09
+## 0.6.0 — 2026-11-11
 
-- Distances to a rally point work on WoW Forever's client (needs RUIN Core 0.5.5).
+- Distances to a rally point work on WoW Forever's client (needs RUIN Core 0.6.0).
 
 ## 0.5.1 — 2026-11-07
 
