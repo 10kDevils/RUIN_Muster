@@ -6,6 +6,10 @@ Versioning: the third number counts the meaningful changes made since the second
 
 (nothing yet)
 
+## 0.6.1 — 2026-11-12
+
+- **A new look, with the rest of the suite.** Muster's pages take its ember orange through and through: the open tab's underline, check marks, the bar on a row under the mouse and the edge a button gets when you point at it. Its header carries a drawing of rally pennants strung between two poles with lanterns that flicker, and Muster has its own icon (a rally flag) on its tab, its header and in the AddOns list.
+
 ## 0.6.0 — 2026-11-11
 
 - Distances to a rally point work on WoW Forever's client (needs RUIN Core 0.6.0).
