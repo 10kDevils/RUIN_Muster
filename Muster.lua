@@ -22,7 +22,7 @@ end
 local W = R.Widgets
 local C = W.COLORS
 
-local M = R:RegisterModule("Muster", { version = "0.7.0" })
+local M = R:RegisterModule("Muster", { version = "0.7.1" })
 
 local KINDS = { "Raid", "Dungeon", "PvP", "Leveling", "Social" }
 local SIZES = { "Open", "5", "10", "20", "40" }
@@ -803,7 +803,7 @@ local function buildEvents(page)
     ui.practiceCheck:SetScript("OnEnter", function(self)
         W.SetBorder(self.box, "glow")
         if not GameTooltip then return end
-        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        W.TipOwner(self)
         GameTooltip:AddLine("Practice mode", 1, 1, 1)
         GameTooltip:AddLine("Try posting events, rallies and bounties. Practice items stay on your screen only.", 0.8, 0.8, 0.8, true)
         GameTooltip:Show()
@@ -901,7 +901,7 @@ local function buildEvents(page)
             row[key]:SetPoint("RIGHT", prevBtn, "LEFT", -2, 0)
             row[key]:HookScript("OnEnter", function(self)
                 if not GameTooltip then return end
-                GameTooltip:SetOwner(self, "ANCHOR_TOP")
+                W.TipOwner(self)
                 GameTooltip:AddLine("Sign up as " .. ROLE_NAMES[role], 1, 1, 1)
                 GameTooltip:Show()
             end)
