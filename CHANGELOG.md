@@ -13,6 +13,7 @@ Versioning: the third number counts the meaningful changes made since the second
 - Fixed: **Slayers stayed empty on WoW Forever.** Its honorable kill message has no PvP rank, which Muster didn't read; every wording the game uses is read now. And when the game counts a kill without a readable message, the dead enemy player you had targeted gets it.
 - **Wanted is the first tab**: Wanted, Events, Plan, Loot, Sightings.
 - **No errors from nameplates in fights**: the Most Wanted nearby warning skips what Retail 12 hides about a nameplate in combat.
+- **No Guild Calendar entries for rallies** or anything starting within the hour: those are happening now.
 
 ## 0.7.0 — 2026-11-12
 

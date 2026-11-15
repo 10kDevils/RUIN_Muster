@@ -236,7 +236,8 @@ function M:Create(title, whenText_, opts)
     else
         self:Send("EVENT", ev, "ORG")
         self:Toast(("Event posted: %s, %s"):format(title, whenText(at)))
-        if opts.calendar ~= false and db.calendar ~= false then M.AddToCalendar(ev) end
+        -- a rally (or anything starting within the hour) is happening now: no calendar entry for it
+        if opts.calendar ~= false and db.calendar ~= false and not opts.rally and at > GetServerTime() + 3600 then M.AddToCalendar(ev) end
     end
     changed()
     return ev
