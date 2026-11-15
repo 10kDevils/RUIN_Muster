@@ -154,19 +154,79 @@ function Wanted.AddKill(d, sender)
     Wanted.Refresh()
 end
 
--- "Grimtusk dies, honorable kill Rank: Sergeant (Estimated Honor Points: 12)"
-local honorPattern
-local function onHonor(_, text)
-    if type(text) ~= "string" or secret(text) then return end
-    if not honorPattern then
-        local g = COMBATLOG_HONORGAIN or "%s dies, honorable kill Rank: %s (Estimated Honor Points: %d)"
-        g = g:gsub("([%(%)%.%-%+%[%]%?%*%^%$])", "%%%1")        -- escape everything magic but the %s and %d
-        g = g:gsub("%%s", "(.-)"):gsub("%%d", "(%%d+)")
-        honorPattern = "^" .. g .. "$"
-    end
-    local victim = text:match(honorPattern)
-    if victim then reportKill(victim) end
+-- "Grimtusk dies, honorable kill Rank: Sergeant (Estimated Honor Points: 12)",
+-- or without the rank on clients with no PvP ranks (Retail 12, WoW Forever):
+-- "Grimtusk dies, honorable kill (12 Honor Points)". Every wording the game
+-- has is tried, then the part every one of them starts with.
+local honorPatterns
+local function toPattern(g)
+    g = g:gsub("%%%d%$", "%%")                                  -- positional %1$s -> %s
+    g = g:gsub("%%[%d%.]*f", "\3"):gsub("%%s", "\1"):gsub("%%d", "\2")
+    g = g:gsub("([%(%)%.%-%+%[%]%?%*%^%$%%])", "%%%1")          -- everything else is plain text
+    g = g:gsub("\1", "(.-)"):gsub("\2", "%%d+"):gsub("\3", "[%%d%%.]+")
+    return "^" .. g .. "$"
 end
+function Wanted.HonorVictim(text)
+    if type(text) ~= "string" or secret(text) then return nil end
+    if not honorPatterns then
+        honorPatterns = {}
+        for _, name in ipairs({ "COMBATLOG_HONORGAIN", "COMBATLOG_HONORGAIN_NO_RANK", "COMBATLOG_HONORGAIN_EXHAUSTION1",
+                                "COMBATLOG_HONORGAIN_EXHAUSTION1_NO_RANK" }) do
+            local g = rawget(_G, name)
+            if type(g) == "string" and g:find("%s", 1, true) then honorPatterns[#honorPatterns + 1] = toPattern(g) end
+        end
+        honorPatterns[#honorPatterns + 1] = toPattern("%s dies, honorable kill Rank: %s (Estimated Honor Points: %d)")
+        honorPatterns[#honorPatterns + 1] = toPattern("%s dies, honorable kill (Estimated Honor Points: %d)")
+    end
+    for _, pat in ipairs(honorPatterns) do
+        local v = text:match(pat)
+        if v and v ~= "" then return v end
+    end
+    return text:match("^(.-) dies, honorable kill") or text:match("^(.-) has died, honorable kill")
+end
+
+local lastHonor = -999
+local function onHonor(_, text)
+    local victim = Wanted.HonorVictim(text)
+    if victim and victim ~= "" then lastHonor = GetTime(); reportKill(victim) end
+end
+
+-- Backup: the game counts your honorable kills even when its kill message
+-- can't be read (a hidden value) or never comes. When the count goes up and no
+-- message named the kill, the dead enemy player you were targeting gets it.
+local hkCount
+local function lifetimeKills()
+    if not GetPVPLifetimeStats then return nil end
+    local ok, hk = pcall(GetPVPLifetimeStats)
+    hk = ok and tonumber(hk) or nil
+    if hk and secret(hk) then return nil end
+    return hk
+end
+local function deadEnemyName()
+    for _, unit in ipairs({ "target", "focus", "mouseover" }) do
+        if UnitExists and UnitExists(unit) and UnitIsPlayer(unit) and UnitIsDead and UnitIsDead(unit)
+            and (not UnitIsEnemy or UnitIsEnemy("player", unit)) then
+            local name, realm = UnitName(unit)
+            if type(name) == "string" and not secret(name) then
+                local g = GetGuildInfo and GetGuildInfo(unit)
+                return (realm and realm ~= "" and not secret(realm)) and (name .. "-" .. realm) or name, (type(g) == "string" and not secret(g)) and g or nil
+            end
+        end
+    end
+    return nil
+end
+local function onKillsChanged()
+    local hk = lifetimeKills()
+    local before = hkCount
+    hkCount = hk or hkCount
+    if hk and before and hk <= before then return end
+    local victim, guild = deadEnemyName()
+    C_Timer.After(2, function()
+        if GetTime() - lastHonor < 4 then return end                -- the message named it
+        reportKill(victim or "an enemy player", guild)
+    end)
+end
+Wanted.OnKillsChanged = onKillsChanged
 
 local function onCombatLog()
     if not CombatLogGetCurrentEventInfo then return end
@@ -348,6 +408,8 @@ function Wanted.Init(module, mdb)
     M:Listen("SLAY", function(_, d, sender) if type(d) == "table" then d.k = sender end; Wanted.AddKill(d, sender) end)
     M:RegisterEvent("PLAYER_DEAD", onDeath)
     M:RegisterEvent("CHAT_MSG_COMBAT_HONOR_GAIN", onHonor)
+    hkCount = lifetimeKills()
+    pcall(M.RegisterEvent, M, "PLAYER_PVP_KILLS_CHANGED", onKillsChanged)
     M:RegisterEvent("NAME_PLATE_UNIT_ADDED", onPlate)
     -- Retail 12 and WoW Forever keep the combat log for Blizzard's UI:
     -- registering it there raises the "blocked from an action" popup, so RUIN
