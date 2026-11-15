@@ -410,7 +410,7 @@ function Wanted.Init(module, mdb)
     M:RegisterEvent("CHAT_MSG_COMBAT_HONOR_GAIN", onHonor)
     hkCount = lifetimeKills()
     pcall(M.RegisterEvent, M, "PLAYER_PVP_KILLS_CHANGED", onKillsChanged)
-    M:RegisterEvent("NAME_PLATE_UNIT_ADDED", onPlate)
+    M:RegisterEvent("NAME_PLATE_UNIT_ADDED", function(...) pcall(onPlate, ...) end)   -- what a plate tells can be hidden in fights
     -- Retail 12 and WoW Forever keep the combat log for Blizzard's UI:
     -- registering it there raises the "blocked from an action" popup, so RUIN
     -- Core skips it on those clients. Kills and deaths still come from honor

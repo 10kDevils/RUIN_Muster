@@ -12,6 +12,7 @@ Versioning: the third number counts the meaningful changes made since the second
 - **Events go on the Guild Calendar too**: posting an event also adds it to the in-game Guild Calendar as a sign-up event (at realm time, weekly if it repeats), when your guild rank may add guild events. A Guild Calendar box on the New event form turns it off.
 - Fixed: **Slayers stayed empty on WoW Forever.** Its honorable kill message has no PvP rank, which Muster didn't read; every wording the game uses is read now. And when the game counts a kill without a readable message, the dead enemy player you had targeted gets it.
 - **Wanted is the first tab**: Wanted, Events, Plan, Loot, Sightings.
+- **No errors from nameplates in fights**: the Most Wanted nearby warning skips what Retail 12 hides about a nameplate in combat.
 
 ## 0.7.0 — 2026-11-12
 
