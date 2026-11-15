@@ -9,6 +9,7 @@ Versioning: the third number counts the meaningful changes made since the second
 ## 0.7.1 — 2026-11-14
 
 - **Tooltips are compact and sit beside what you point at**: long lines break onto several short ones, and the tooltip opens to the side of the button with more room.
+- **Events go on the Guild Calendar too**: posting an event also adds it to the in-game Guild Calendar as a sign-up event (at realm time, weekly if it repeats), when your guild rank may add guild events. A Guild Calendar box on the New event form turns it off.
 
 ## 0.7.0 — 2026-11-12
 

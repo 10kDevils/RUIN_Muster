@@ -38,7 +38,7 @@ local BOUNTY_DAYS = 7
 local CLAIM_SECONDS = 5 * 60                            -- witnesses have this long to confirm a kill
 local WITNESS_YARDS = 200
 local RALLY_ICON = "Interface\\Icons\\Ability_Warrior_BattleShout"
-local DEFAULTS = { events = {}, reminded = {}, practice = false, bounties = {}, claims = {}, pins = true }
+local DEFAULTS = { events = {}, reminded = {}, practice = false, bounties = {}, claims = {}, pins = true, calendar = true }
 
 ns.Muster = M
 
@@ -156,7 +156,60 @@ local function canManage(ev)
     return canCreate() and me ~= nil and ev.by == me.name
 end
 
--- opts: { kind, desc, size, need = { t, h, d }, weekly }
+-- Put an event on the in-game Guild Calendar too (needs a guild rank that
+-- may add guild events). Times there are realm time.
+local CAL_TYPE = { Raid = "Raid", Dungeon = "Dungeon", PvP = "PvP", Leveling = "Dungeon", Social = "Meeting" }
+local CAL_NUM = { Raid = 0, Dungeon = 1, PvP = 2, Meeting = 3, Other = 4 }
+local function realmTable(at)
+    local offset = 0
+    local now = C_DateAndTime and C_DateAndTime.GetCurrentCalendarTime and C_DateAndTime.GetCurrentCalendarTime()
+    if type(now) == "table" and now.year then
+        local realmNow = time({ year = now.year, month = now.month, day = now.monthDay, hour = now.hour, min = now.minute })
+        offset = realmNow - time()
+        offset = math.floor(offset / 900 + 0.5) * 900       -- zones sit on quarter hours
+    end
+    return date("*t", at + offset)
+end
+
+function M.AddToCalendar(ev)
+    local Cal = C_Calendar
+    if not (ev and Cal and Cal.CreateGuildSignUpEvent and Cal.AddEvent) then return false end
+    if IsInGuild and not IsInGuild() then return false end
+    if CanEditGuildEvent and not CanEditGuildEvent() then
+        M:Print("Not added to the Guild Calendar: your guild rank can't add guild events.")
+        return false
+    end
+    local ok, err = pcall(function()
+        if Cal.CloseEvent then Cal.CloseEvent() end
+        Cal.CreateGuildSignUpEvent()
+        Cal.EventSetTitle(tostring(ev.title):sub(1, 31))
+        local desc = ev.desc ~= "" and ev.desc or ""
+        desc = (desc ~= "" and (desc .. "\n") or "") .. "Posted with RUIN Muster: sign up in the RUIN app, Muster tab."
+        if Cal.EventSetDescription then Cal.EventSetDescription(desc:sub(1, 255)) end
+        local t = realmTable(ev.at)
+        Cal.EventSetDate(t.month, t.day, t.year)
+        Cal.EventSetTime(t.hour, t.min)
+        local kind = CAL_TYPE[ev.kind] or "Other"
+        if Cal.EventSetType then
+            local num = Enum and Enum.CalendarEventType and Enum.CalendarEventType[kind] or CAL_NUM[kind]
+            if num then Cal.EventSetType(num) end
+        end
+        if ev.weekly and Cal.EventSetRepeatOption then
+            local wk = Enum and Enum.CalendarEventRepeatOptions and Enum.CalendarEventRepeatOptions.Weekly or 1
+            pcall(Cal.EventSetRepeatOption, wk)
+        end
+        Cal.AddEvent()
+    end)
+    if not ok then
+        M:Print("Couldn't add it to the Guild Calendar" .. (err and (": " .. tostring(err):gsub("^.-:%d+: ", "")) or "") .. ".")
+        return false
+    end
+    M.calendarAt = GetTime()
+    M:Print("Also added to the Guild Calendar.")
+    return true
+end
+
+-- opts: { kind, desc, size, need = { t, h, d }, weekly, calendar }
 function M:Create(title, whenText_, opts)
     if type(opts) == "string" then opts = { kind = opts } end
     opts = opts or {}
@@ -183,6 +236,7 @@ function M:Create(title, whenText_, opts)
     else
         self:Send("EVENT", ev, "ORG")
         self:Toast(("Event posted: %s, %s"):format(title, whenText(at)))
+        if opts.calendar ~= false and db.calendar ~= false then M.AddToCalendar(ev) end
     end
     changed()
     return ev
@@ -836,6 +890,11 @@ local function buildEvents(page)
     end, "Size: ")
     size:SetPoint("LEFT", kind, "RIGHT", 6, 0)
     size.tipTitle = "Group size; fills in how many tanks, healers and DPS are needed"
+    local cal = W.Check(f, "Guild Calendar", function() return db.calendar ~= false end, function(v) db.calendar = v end)
+    cal:SetPoint("LEFT", size, "RIGHT", 10, 0)
+    cal.label:SetFontObject(GameFontHighlightSmall)
+    cal.tip = "Also put the event on the in-game Guild Calendar (your guild rank must be able to add guild events)."
+    ui.calendarCheck = cal
 
     -- when: a day list and hour : minute AM/PM boxes (your local time)
     local when = W.WhenPicker(f)
@@ -1355,6 +1414,13 @@ function M:OnEnable()
         C_Timer.After(6, function() if R:IsConnected() then self:Send("ASK", {}, "ORG") end end)
     end)
     C_Timer.NewTicker(30, tick)
+    -- the calendar turns an event down after the fact (rank, a full calendar...)
+    self:RegisterEvent("CALENDAR_UPDATE_ERROR", function(_, msg)
+        if M.calendarAt and GetTime() - M.calendarAt < 10 then
+            M.calendarAt = nil
+            M:Print("The Guild Calendar didn't take the event" .. (type(msg) == "string" and msg ~= "" and (": " .. msg) or "") .. ".")
+        end
+    end)
 end
 
 function RUIN_Muster_Open() M:OpenTab() end
