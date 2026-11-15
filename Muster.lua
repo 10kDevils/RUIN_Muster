@@ -1312,10 +1312,10 @@ local internals = {
 }
 ns.MusterInternals = internals
 
--- Five tabs: Events (post and sign up), Plan (the picked event's raid groups,
--- squads and after-action report), Loot (soft reserves and drops), Wanted
--- (Most Wanted and bounties) and Sightings.
-local TABS = { "Events", "Plan", "Loot", "Wanted", "Sightings" }
+-- Five tabs: Wanted (Most Wanted and bounties), Events (post and sign up),
+-- Plan (the picked event's raid groups, squads and after-action report), Loot
+-- (soft reserves and drops) and Sightings.
+local TABS = { "Wanted", "Events", "Plan", "Loot", "Sightings" }
 local SUBS = { Plan = { "Groups", "Squads" }, Loot = { "Reserves", "Drops" }, Wanted = { "Most Wanted", "Bounties" } }
 local function tabIndex(name) for i, n in ipairs(TABS) do if n == name then return i end end end
 local sub = {}           -- top tab name -> its own sub-tabs
@@ -1323,8 +1323,8 @@ local sub = {}           -- top tab name -> its own sub-tabs
 local function buildPage(panel)
     ui.panel = panel
     ui.tabs = W.SubTabs(panel, TABS, function() refreshPage() end)
-    ui.eventsPage = ui.tabs.pages[1]
-    buildEvents(ui.tabs.pages[1])
+    ui.eventsPage = ui.tabs.pages[tabIndex("Events")]
+    buildEvents(ui.eventsPage)
     for name, names in pairs(SUBS) do
         sub[name] = W.SubTabs(ui.tabs.pages[tabIndex(name)], names, function() refreshPage() end)
     end
@@ -1340,7 +1340,7 @@ local function buildPage(panel)
     refreshPage = function()
         if not ui.panel:IsVisible() then return end
         local items = upcoming()
-        ui.tabs:SetLabel(1, #items > 0 and ("Events (" .. #items .. ")") or "Events")
+        ui.tabs:SetLabel(tabIndex("Events"), #items > 0 and ("Events (" .. #items .. ")") or "Events")
         local name = TABS[ui.tabs.selected]
         local st = sub[name]
         local page = st and SUBS[name][st.selected or 1]
