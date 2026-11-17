@@ -4,7 +4,10 @@ Versioning: the third number counts the meaningful changes made since the second
 
 ## Unreleased
 
-(nothing yet)
+## 0.8.1
+
+- **The bounty mark**: anyone with a bounty on them, or on their guild, wears a crimson seal with a skull over their nameplate and beside their portrait when you target them. Their tooltip says *Bounty* with the reward.
+- **Anyone in the org can post a bounty**, on the Bounties page, from a Most Wanted row or with `/muster bounty`. Each member may have five open at once. A bounty stays its poster's: only they or an officer can take it down, and each member shares their own bounties with players who come online.
 
 ## 0.8.0 — 2026-11-15
 

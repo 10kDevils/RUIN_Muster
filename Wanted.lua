@@ -353,7 +353,7 @@ function Wanted.Build(page)
             row.a:SetText(("%s%d.|r %s%s|r%s"):format(C.dim, e.i, C.bad, short(r.name), r.guild and (C.dim .. " <" .. r.guild .. ">|r") or ""))
             row.b:SetText(("%s%d|r this week  ·  %d in all  ·  %d victims  ·  %slast %s%s|r"):format(C.white, r.week, r.total, r.victimCount,
                 C.dim, W.Ago(math.max(60, now() - r.last)), r.zone and r.zone ~= "" and (" in " .. r.zone) or ""))
-            if M.PostBounty and R:IsOfficer() then
+            if M.PostBounty then
                 row.btn:SetScript("OnClick", function() M:PostBounty(short(r.name), "Player", "Most Wanted") end)
                 row.btn:Show()
             end

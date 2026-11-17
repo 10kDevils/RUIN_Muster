@@ -22,7 +22,7 @@ end
 local W = R.Widgets
 local C = W.COLORS
 
-local M = R:RegisterModule("Muster", { version = "0.8.0" })
+local M = R:RegisterModule("Muster", { version = "0.8.1" })
 
 local KINDS = { "Raid", "Dungeon", "PvP", "Leveling", "Social" }
 local SIZES = { "Open", "5", "10", "20", "40" }
@@ -141,13 +141,19 @@ end
 local function practicing() return (db and db.practice) or not R:IsConnected() end
 -- Who may create events (rallies included): officers, plus the ranks their
 -- guild's officers allow under Settings > Org > Guild settings (RUIN Core
--- 0.3.17). Bounties stay with officers.
+-- 0.3.17). Anyone in the org may post a bounty.
 local function canCreate()
     if R.CanCreateEvents then return R:CanCreateEvents() end
     return R:IsOfficer()
 end
 local function canPost() return canCreate() or practicing() end
-local function canBounty() return R:IsOfficer() or practicing() end
+local function canBounty() return true end
+local BOUNTY_MAX_EACH = 5        -- open bounties one member may have at once
+-- A bounty can be taken down by whoever posted it, or an officer.
+local function canRemoveBounty(b)
+    if not b then return false end
+    return b.practice or practicing() or R:IsOfficer() or sameName(UnitName("player"), b.by)
+end
 -- Officers manage every event; other ranks allowed to create manage their own.
 local function canManage(ev)
     if not ev then return false end
@@ -380,10 +386,9 @@ function M:OnAsk()
             end
         end
 
-        if R:IsOfficer() then
-            for _, b in ipairs(M.ActiveBounties()) do
-                if not b.practice then self:Send("BOUNTY", b, "ORG", nil, R.PRIORITY.BULK) end
-            end
+        -- each member shares the bounties they posted (a bounty is its poster's)
+        for _, b in ipairs(M.ActiveBounties()) do
+            if not b.practice and sameName(b.by, me) then self:Send("BOUNTY", b, "ORG", nil, R.PRIORITY.BULK) end
         end
     end)
 end
@@ -556,7 +561,7 @@ function M:Rally(title)
 end
 
 ---------------------------------------------------------------------------
--- Bounties: officers name a rival guild or player; a claimed kill counts
+-- Bounties: anyone in the org names a rival guild or player; a claimed kill counts
 -- once another RUIN member confirms it (moved here from RUIN Warfront).
 ---------------------------------------------------------------------------
 local function activeBounties()
@@ -569,10 +574,19 @@ local function activeBounties()
 end
 M.ActiveBounties = function() return activeBounties() end
 
+local function bountiesBy(name)
+    local n = 0
+    for _, b in ipairs(activeBounties()) do if sameName(b.by, name) then n = n + 1 end end
+    return n
+end
+
 function M:PostBounty(target, kind, reward)
-    if not canBounty() then return self:Print("Only officers can post bounties.") end
+    if not canBounty() then return end
     target = R.Util.Trim(target or ""):sub(1, 40)
     if target == "" then return self:Print("Name the guild or player for the bounty.") end
+    if bountiesBy(UnitName("player")) >= BOUNTY_MAX_EACH then
+        return self:Print(("You have %d open bounties. Remove one first."):format(BOUNTY_MAX_EACH))
+    end
     local now = GetServerTime()
     local b = { id = newId(), target = target, kind = kind == "Player" and "Player" or "Guild",
                 reward = R.Util.Trim(reward or ""):sub(1, 40), by = UnitName("player"), t = now,
@@ -582,38 +596,42 @@ function M:PostBounty(target, kind, reward)
     if not b.practice then self:Send("BOUNTY", b, "ORG") end
     self:Toast(("Bounty posted on %s %s%s"):format(b.kind == "Guild" and "guild" or "player", b.target,
         b.reward ~= "" and (" (" .. b.reward .. ")") or ""))
-    refreshPage()
+    M.RefreshBountyMarks(); refreshPage()
     return b
 end
 
 function M:RemoveBounty(id)
     local b = db.bounties[id]
-    if not b or not canBounty() then return end
+    if not canRemoveBounty(b) then return end
     db.bounties[id] = nil
     if not b.practice then self:Send("BDEL", { id = id }, "ORG") end
-    refreshPage()
+    M.RefreshBountyMarks(); refreshPage()
 end
 
 function M:OnBounty(b, sender)
     if type(b) ~= "table" or type(b.id) ~= "string" or type(b.target) ~= "string" or type(b.exp) ~= "number" then return end
-    if not moderator(sender) then return end                       -- bounties are officers' (checked by sender)
     if b.exp > GetServerTime() + BOUNTY_DAYS * 86400 + 3600 then return end
+    -- anyone in the org may post (the org channel only carries members), up
+    -- to a few open bounties each; a bounty stays its first poster's
+    local known = db.bounties[b.id]
+    if known and not sameName(known.by, sender) then return end
+    if not known and bountiesBy(sender) >= BOUNTY_MAX_EACH then return end
     b.t = sane(b.t) or GetServerTime()
     b.by, b.practice = sender, nil
     b.target = b.target:sub(1, 40)
     b.reward = type(b.reward) == "string" and b.reward:sub(1, 40) or ""
     b.kind = b.kind == "Player" and "Player" or "Guild"
-    local known = db.bounties[b.id]
     db.bounties[b.id] = b
     if not known and b.exp > GetServerTime() then
         self:Toast(("Bounty on %s %s%s, posted by %s"):format(b.kind == "Player" and "player" or "guild", b.target,
             b.reward ~= "" and (" (" .. b.reward .. ")") or "", W.ClassName(sender)))
     end
-    refreshPage()
+    M.RefreshBountyMarks(); refreshPage()
 end
 
 function M:OnBountyDelete(d, sender)
-    if type(d.id) == "string" and db.bounties[d.id] and moderator(sender) then db.bounties[d.id] = nil; refreshPage() end
+    local b = type(d) == "table" and type(d.id) == "string" and db.bounties[d.id]
+    if b and (sameName(b.by, sender) or moderator(sender)) then db.bounties[d.id] = nil; M.RefreshBountyMarks(); refreshPage() end
 end
 
 local function secret(v) return issecretvalue and issecretvalue(v) end
@@ -622,6 +640,101 @@ local function matchBounty(name, guild)
     for _, b in ipairs(activeBounties()) do
         if b.kind == "Player" and name and b.target:lower() == R.Util.ShortName(name):lower() then return b end
         if b.kind == "Guild" and guild and b.target:lower() == guild:lower() then return b end
+    end
+end
+
+---------------------------------------------------------------------------
+-- The bounty mark: a crimson seal with a skull over the nameplate of anyone
+-- with a bounty on them (or on their guild), beside their portrait when you
+-- target them, and on their tooltip with the reward.
+---------------------------------------------------------------------------
+local BOUNTY_ICON = "Interface\\AddOns\\RUIN_Muster\\Media\\Bounty"
+M.BOUNTY_ICON = BOUNTY_ICON
+
+-- The bounty on a unit you can see, if there is one. What the game hides in
+-- a fight (a secret name or guild) is skipped.
+function M.BountyOn(unit)
+    if not (db and unit and UnitExists and UnitExists(unit) and UnitIsPlayer and UnitIsPlayer(unit)) then return nil end
+    if UnitIsUnit and UnitIsUnit(unit, "player") then return nil end
+    local name = UnitName(unit)
+    if name == nil or secret(name) then return nil end
+    local guild = GetGuildInfo and GetGuildInfo(unit)
+    if secret(guild) then guild = nil end
+    return matchBounty(name, guild)
+end
+
+local function markFor(owner, size, key)
+    local m = owner[key]
+    if m then return m end
+    m = CreateFrame("Frame", nil, owner)
+    m:SetSize(size, size)
+    m:SetFrameStrata("HIGH")
+    m.icon = m:CreateTexture(nil, "OVERLAY")
+    m.icon:SetAllPoints()
+    m.icon:SetTexture(BOUNTY_ICON)
+    m:Hide()
+    owner[key] = m
+    return m
+end
+
+local function markPlate(unit)
+    if not (C_NamePlate and C_NamePlate.GetNamePlateForUnit) then return end
+    local ok, plate = pcall(C_NamePlate.GetNamePlateForUnit, unit)
+    if not ok or type(plate) ~= "table" or (plate.IsForbidden and plate:IsForbidden()) then return end
+    local b = M.BountyOn(unit)
+    local m = plate.ruinBounty
+    if not b then if m then m:Hide() end return end
+    m = markFor(plate, 22, "ruinBounty")
+    m:ClearAllPoints()
+    local anchor = plate.UnitFrame and plate.UnitFrame.name or plate.UnitFrame or plate
+    m:SetPoint("BOTTOM", anchor, "TOP", 0, 2)
+    m:Show()
+end
+
+local function markTarget()
+    local tf = rawget(_G, "TargetFrame")
+    if type(tf) ~= "table" then return end
+    local m = markFor(tf, 26, "ruinBounty")
+    if not M.BountyOn("target") then m:Hide() return end
+    local c = tf.TargetFrameContainer
+    local portrait = (type(c) == "table" and type(c.Portrait) == "table" and c.Portrait) or tf.portrait or tf
+    m:ClearAllPoints()
+    m:SetPoint("CENTER", portrait, "TOPRIGHT", -6, -6)
+    m:Show()
+end
+
+function M.RefreshBountyMarks()
+    if C_NamePlate and C_NamePlate.GetNamePlates then
+        local ok, plates = pcall(C_NamePlate.GetNamePlates)
+        for _, plate in ipairs(ok and plates or {}) do
+            local unit = plate.namePlateUnitToken or (plate.UnitFrame and plate.UnitFrame.unit)
+            if unit then pcall(markPlate, unit) elseif plate.ruinBounty then plate.ruinBounty:Hide() end
+        end
+    end
+    pcall(markTarget)
+end
+
+local function onUnitTooltip(tooltip)
+    if not (tooltip and tooltip.GetUnit) then return end
+    local ok, _, unit = pcall(tooltip.GetUnit, tooltip)
+    if not ok or not unit or secret(unit) then return end
+    local b = M.BountyOn(unit)
+    if not b then return end
+    tooltip:AddLine(("|T%s:16:16|t %sBounty|r%s"):format(BOUNTY_ICON, C.bad,
+        (b.reward or "") ~= "" and ("  " .. C.good .. b.reward .. "|r") or "") ..
+        (b.kind == "Guild" and (" " .. C.dim .. "(on <" .. b.target .. ">)|r") or ""))
+end
+
+function M:InitBountyMarks()
+    self:RegisterEvent("NAME_PLATE_UNIT_ADDED", function(_, unit) pcall(markPlate, unit) end)
+    self:RegisterEvent("NAME_PLATE_UNIT_REMOVED", function(_, unit)
+        local ok, plate = pcall(C_NamePlate.GetNamePlateForUnit, unit)
+        if ok and type(plate) == "table" and plate.ruinBounty then plate.ruinBounty:Hide() end
+    end)
+    self:RegisterEvent("PLAYER_TARGET_CHANGED", function() pcall(markTarget) end)
+    self:RegisterEvent("UNIT_NAME_UPDATE", function(_, unit) if unit == "target" then pcall(markTarget) end end)
+    if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType and Enum.TooltipDataType.Unit then
+        TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tt) pcall(onUnitTooltip, tt) end)
     end
 end
 
@@ -1245,10 +1358,10 @@ local function buildBounties(page)
             C.gold, b.target, (b.reward or "") ~= "" and ("  " .. C.good .. b.reward .. "|r") or "", C.dim, tostring(b.by),
             W.Duration((b.exp or 0) - GetServerTime()), kills > 0 and ("  ·  " .. kills .. " confirmed kill" .. (kills == 1 and "" or "s")) or "",
             b.practice and (C.dim .. " [practice]|r") or ""))
-        row.del:SetShown(canBounty())
+        row.del:SetShown(canRemoveBounty(b))
         row.del:SetScript("OnClick", function() M:RemoveBounty(b.id) end)
     end)
-    ui.bountyList:SetEmptyText("No bounties posted. Officers can put a price on a rival guild or player.")
+    ui.bountyList:SetEmptyText("No bounties posted. Anyone in the org can put a price on a rival guild or player.")
 
     ui.claimBtn = W.Button(page, "Claim kill on target", 170, function() M:ClaimKill() end)
     ui.claimHeader = W.Header(page, "Claims")
@@ -1408,6 +1521,7 @@ function M:OnEnable()
     self:AddTab("Muster", buildPage)
     ns.World.Init(self, db, function() refreshPage() end)
     ns.Wanted.Init(self, db)
+    self:InitBountyMarks()
     ns.WarRoom.Init(self, internals)
     ns.Loot.Init(self, internals, db)
 
