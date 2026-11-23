@@ -4,6 +4,9 @@ Versioning: the third number counts the meaningful changes made since the second
 
 ## Unreleased
 
+- **Attendance.** A new Loot > Attendance page shows, for each player this season, the events they attended, the ones they signed up for (and how many of those they kept), the ones they signed up for and missed, and their loot and points from the loot notes. While an event runs, its leaders' Muster notes who's in the group every few minutes and shares it with everyone (only the event's author or an officer can). `/muster attendance` opens it.
+- **Reminders.** 30 minutes and 5 minutes before an event you signed up for, Muster tells you, with your role. Turn it off on the Attendance page or with `/muster remind`.
+
 - **Bounty marks are sturdier**: when a nameplate goes away Muster now checks the nameplate system is there first, the same way it does everywhere else, so it can't raise an error.
 
 ## 0.8.10

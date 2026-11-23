@@ -14,3 +14,4 @@ World.lua
 Wanted.lua
 WarRoom.lua
 Loot.lua
+Attendance.lua

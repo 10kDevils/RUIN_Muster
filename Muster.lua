@@ -1431,7 +1431,7 @@ ns.MusterInternals = internals
 -- Plan (the picked event's raid groups, squads and after-action report), Loot
 -- (soft reserves and drops) and Sightings.
 local TABS = { "Wanted", "Events", "Plan", "Loot", "Sightings" }
-local SUBS = { Plan = { "Groups", "Squads" }, Loot = { "Reserves", "Drops" }, Wanted = { "Most Wanted", "Bounties" } }
+local SUBS = { Plan = { "Groups", "Squads" }, Loot = { "Reserves", "Drops", "Attendance" }, Wanted = { "Most Wanted", "Bounties" } }
 local function tabIndex(name) for i, n in ipairs(TABS) do if n == name then return i end end end
 local sub = {}           -- top tab name -> its own sub-tabs
 
@@ -1447,6 +1447,7 @@ local function buildPage(panel)
     ns.WarRoom.Build(sub.Plan.pages[2])
     buildReserves(sub.Loot.pages[1])
     ns.Loot.Build(sub.Loot.pages[2])
+    if ns.Attendance then ns.Attendance.Build(sub.Loot.pages[3]) end
     ns.Wanted.Build(sub.Wanted.pages[1])
     buildBounties(sub.Wanted.pages[2])
     ns.World.BuildSightings(ui.tabs.pages[tabIndex("Sightings")])
@@ -1466,6 +1467,8 @@ local function buildPage(panel)
             refreshRoster()
         elseif page == "Squads" then
             ns.WarRoom.Refresh()
+        elseif page == "Attendance" then
+            ns.Attendance.Refresh()
         elseif page == "Reserves" then
             refreshReserves()
         elseif page == "Drops" then
@@ -1525,6 +1528,7 @@ function M:OnEnable()
     self:InitBountyMarks()
     ns.WarRoom.Init(self, internals)
     ns.Loot.Init(self, internals, db)
+    if ns.Attendance then ns.Attendance.Init(self, internals, db) end
 
     R:Subscribe("CHANNELS_CHANGED", function()
         C_Timer.After(6, function() if R:IsConnected() then self:Send("ASK", {}, "ORG") end end)
@@ -1576,6 +1580,11 @@ SlashCmdList.RUINMUSTER = function(input)
     elseif cmd == "wanted" or cmd == "war" or cmd == "warroom" or cmd == "loot" then
         M:OpenTab()
         M:SelectSubTab(cmd == "wanted" and "Most Wanted" or cmd == "loot" and "Drops" or "Squads")
+    elseif cmd == "remind" and ns.Attendance then
+        db.remind = db.remind == false
+        M:Print("Reminders before events you signed up for: " .. (db.remind and "on" or "off"))
+    elseif cmd == "attendance" then
+        M:OpenTab(); M:SelectSubTab("Attendance")
     elseif cmd == "pins" then
         db.pins = not db.pins
         updatePins()
