@@ -728,6 +728,7 @@ end
 function M:InitBountyMarks()
     self:RegisterEvent("NAME_PLATE_UNIT_ADDED", function(_, unit) pcall(markPlate, unit) end)
     self:RegisterEvent("NAME_PLATE_UNIT_REMOVED", function(_, unit)
+        if not (C_NamePlate and C_NamePlate.GetNamePlateForUnit) then return end
         local ok, plate = pcall(C_NamePlate.GetNamePlateForUnit, unit)
         if ok and type(plate) == "table" and plate.ruinBounty then plate.ruinBounty:Hide() end
     end)

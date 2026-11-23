@@ -4,6 +4,8 @@ Versioning: the third number counts the meaningful changes made since the second
 
 ## Unreleased
 
+- **Bounty marks are sturdier**: when a nameplate goes away Muster now checks the nameplate system is there first, the same way it does everywhere else, so it can't raise an error.
+
 ## 0.8.10
 
 - Version matched to the rest of the RUIN suite; no changes.
