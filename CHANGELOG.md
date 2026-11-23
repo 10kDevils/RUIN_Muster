@@ -4,6 +4,10 @@ Versioning: the third number counts the meaningful changes made since the second
 
 ## Unreleased
 
+## 0.8.9
+
+- Version matched to the rest of the RUIN suite; no changes.
+
 ## 0.8.1
 
 - **The bounty mark**: anyone with a bounty on them, or on their guild, wears a crimson seal with a skull over their nameplate and beside their portrait when you target them. Their tooltip says *Bounty* with the reward.
