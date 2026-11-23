@@ -198,9 +198,12 @@ function A.Build(page)
         function(v) db.remind = v end)
     ui.remind:SetPoint("TOPRIGHT", page, "TOPRIGHT", -290, -2)
     ui.remind.tip = "30 minutes and 5 minutes before an event you signed up for."
-    ui.heads = W.Label(page, C.dim .. "Player                                   Attended      Signed up      Missed      Loot (points)      Last event|r",
-        "GameFontHighlightSmall")
-    ui.heads:SetPoint("TOPLEFT", 6, -46)
+    -- column titles at the same places as the columns below them
+    local HEADS = { { "Player", 6 }, { "Attended", 222 }, { "Signed up", 310 }, { "Missed", 414 }, { "Loot (points)", 490 }, { "Last event", 620 } }
+    for _, hd in ipairs(HEADS) do
+        local l = W.Label(page, C.dim .. hd[1] .. "|r", "GameFontHighlightSmall")
+        l:SetPoint("TOPLEFT", hd[2], -46)
+    end
     ui.list = W.List(page, 24, function(row)
         local function col(x, w)
             local l = W.Label(row, "", "GameFontHighlightSmall")
