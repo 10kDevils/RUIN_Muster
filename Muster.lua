@@ -1060,9 +1060,14 @@ local function buildEvents(page)
     ui.postBtn, ui.titleBox = post, title
 
     ui.list = W.List(page, 30, function(row)
+        -- the rally part (CONTESTED, zone and distance) has its own text just
+        -- left of the buttons, so a long title gets cut off instead of it
+        row.rally = W.Label(row, "")
+        row.rally:SetPoint("RIGHT", row, "RIGHT", -222, 0)
+        row.rally:SetWordWrap(false)
         row.text = W.Label(row, "")
         row.text:SetPoint("LEFT", 4, 0)
-        row.text:SetPoint("RIGHT", row, "RIGHT", -222, 0)
+        row.text:SetPoint("RIGHT", row.rally, "LEFT", -2, 0)
         row.text:SetWordWrap(false)
         row.del = W.Button(row, "Delete", 56)
         row.del:SetPoint("RIGHT", 0, 0)
@@ -1087,7 +1092,8 @@ local function buildEvents(page)
         local status = mine and (C.good .. "  you: " .. ROLE_NAMES[mine.role] .. myGroupText(ev) .. "|r") or ""
         local rep = (ev.weekly or ev.series) and (C.dim .. " (weekly)|r") or ""
         local prac = ev.practice and (C.dim .. " [practice]|r") or ""
-        row.text:SetText(("%s%s|r  %s%s%s  %s%s%s"):format(C.gold, whenText(ev.at), ev.title, rep, prac, needText(ev), status, rallyText(ev)))
+        row.text:SetText(("%s%s|r  %s%s%s  %s%s"):format(C.gold, whenText(ev.at), ev.title, rep, prac, needText(ev), status))
+        row.rally:SetText(rallyText(ev))
         row.tip = eventTooltip(ev)
         row.t:SetScript("OnClick", function() M:SignUp(ev.id, "T") end)
         row.h:SetScript("OnClick", function() M:SignUp(ev.id, "H") end)
@@ -1104,6 +1110,8 @@ local function buildEvents(page)
                 right = b
             end
         end
+        row.rally:ClearAllPoints()
+        row.rally:SetPoint("RIGHT", right, "LEFT", -6, 0)
         row.del:SetScript("OnClick", function() M:Delete(ev.id) end)
     end)
     ui.list:SetEmptyText("No upcoming events yet. Officers (and the ranks they allow) post raid nights, PvP pushes and leveling groups here, for every RUIN guild.")

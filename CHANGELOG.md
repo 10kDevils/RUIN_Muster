@@ -4,6 +4,7 @@ Versioning: the third number counts the meaningful changes made since the second
 
 ## Unreleased
 
+- **Rally point always shows on event rows**: on Muster > Events, the rally zone and distance (and CONTESTED) now sit in their own spot beside the role buttons, so a long title or zone name no longer cuts them off.
 - **Attendance.** A new Loot > Attendance page shows, for each player this season, the events they attended, the ones they signed up for (and how many of those they kept), the ones they signed up for and missed, and their loot and points from the loot notes. While an event runs, its leaders' Muster notes who's in the group every few minutes and shares it with everyone (only the event's author or an officer can). `/muster attendance` opens it.
 - **Reminders.** 30 minutes and 5 minutes before an event you signed up for, Muster tells you, with your role. Turn it off on the Attendance page or with `/muster remind`.
 
