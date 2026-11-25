@@ -203,8 +203,11 @@ function World.BuildSightings(page)
             tip:AddLine(k.label, k.rgb[1], k.rgb[2], k.rgb[3])
             if e.text ~= "" then tip:AddLine(e.text, 1, 1, 1, true) end
             tip:AddLine(e.where, 0.9, 0.9, 0.9)
-            local dist = e.map and R.Map:DistanceText(e.map, e.x, e.y)
-            if dist then tip:AddLine(dist .. " from you", 0.7, 0.7, 0.7) end
+            local dist, yd = nil, nil
+            if e.map then dist, yd = R.Map:DistanceText(e.map, e.x, e.y) end
+            -- within a few yards the distance text is just "here"
+            if dist and yd and yd < 5 then tip:AddLine("You are here", 0.7, 0.7, 0.7)
+            elseif dist then tip:AddLine(dist .. " from you", 0.7, 0.7, 0.7) end
             tip:AddLine("Reported by " .. short(e.by) .. ", " .. W.Ago(GetServerTime() - e.t), 0.6, 0.6, 0.6)
             if k.find then tip:AddLine("Find group lists you in RUIN Finder.", 0.5, 0.8, 0.5) end
         end
