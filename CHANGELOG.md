@@ -2,7 +2,7 @@
 
 Versioning: the third number counts the meaningful changes made since the second number last went up.
 
-## Unreleased
+## 0.9.0
 
 - **Sightings at your own spot read "You are here"**: hovering a report made where you stand no longer says "here from you".
 - **Rally point always shows on event rows**: on Muster > Events, the rally zone and distance (and CONTESTED) now sit in their own spot beside the role buttons, so a long title or zone name no longer cuts them off.
